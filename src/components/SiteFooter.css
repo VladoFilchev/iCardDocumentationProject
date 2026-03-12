@@ -1,0 +1,124 @@
+.site-footer {
+  margin-top: 24px;
+  padding: 34px 32px 22px;
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e4e4e8;
+  box-shadow: 0 14px 28px rgba(77, 76, 125, 0.05);
+}
+
+.site-footer-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr 1.1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.site-footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.site-footer-logo {
+  width: 120px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.site-footer-brand-text {
+  margin: 0;
+  max-width: 320px;
+  color: #76798b;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.site-footer-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.site-footer-column h4 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #4d4c7d;
+}
+
+.site-footer-column button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: #1f8ff0;
+  font-size: 15px;
+  line-height: 1.6;
+  transition: opacity 0.2s ease;
+}
+
+.site-footer-column button:hover {
+  opacity: 0.72;
+}
+
+.site-footer-column p {
+  margin: 0;
+  color: #76798b;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.site-footer-contact-link {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 6px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  text-decoration: none;
+  background: #27ed87;
+  color: white;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(31, 143, 240, 0.18);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.site-footer-contact-link:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.site-footer-bottom {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid #e4e4e8;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  color: #8a8ea1;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+@media (max-width: 1200px) {
+  .site-footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .site-footer {
+    padding: 24px 22px 18px;
+  }
+
+  .site-footer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .site-footer-bottom {
+    flex-direction: column;
+  }
+}
