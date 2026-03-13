@@ -1,6 +1,4 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/filchevw/icarddocumentation.filchevweb.com
-    - /opt/cpanel/ea-nodejs20/bin/npm install
-    - /opt/cpanel/ea-nodejs20/bin/npm run build
     - /bin/cp -R dist/* $DEPLOYPATH
