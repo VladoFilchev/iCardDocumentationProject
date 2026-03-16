@@ -63,25 +63,35 @@
 
       <main class="ipg-main">
         <div class="content-hero">
-          <div class="content-topline">
-            <span class="hero-chip">IPG</span>
-            <span class="hero-separator">/</span>
-            <span class="hero-subtitle">{{ active?.subtitle }}</span>
-          </div>
+  <div class="content-topline">
+    <span class="hero-chip">IPG</span>
+    <span class="hero-separator">/</span>
+    <span class="hero-subtitle">{{ active.subtitle }}</span>
+  </div>
 
-          <h1>{{ active?.title }}</h1>
-          <p>{{ active?.description }}</p>
+  <h1>{{ active.title }}</h1>
+  <p>{{ active.description }}</p>
 
-          <div class="facts-row">
-            <div
-              v-for="fact in active?.facts || []"
-              :key="fact"
-              class="fact-pill"
-            >
-              {{ fact }}
-            </div>
-          </div>
-        </div>
+  <a
+    v-if="active.link"
+    :href="active.link.href"
+    target="_blank"
+    rel="noreferrer"
+    class="doc-link"
+  >
+    {{ active.link.label }}
+  </a>
+
+  <div class="facts-row">
+    <div
+      v-for="fact in active.facts || []"
+      :key="fact"
+      class="fact-pill"
+    >
+      {{ fact }}
+    </div>
+  </div>
+</div>
 
         <section v-if="active?.body" class="doc-section">
           <h2>Details</h2>

@@ -433,6 +433,20 @@
   line-height: 1.7;
 }
 
+.doc-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 14px;
+  color: #20cf84;
+  font-weight: 700;
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+.doc-link:hover {
+  opacity: 0.75;
+}
+
 @media (max-width: 1300px) {
   .ipg-layout {
     grid-template-columns: 300px 1fr;
