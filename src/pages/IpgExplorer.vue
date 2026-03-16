@@ -62,7 +62,7 @@
       </aside>
 
       <main class="ipg-main">
-        <div class="content-hero">
+       <div class="content-hero">
   <div class="content-topline">
     <span class="hero-chip">IPG</span>
     <span class="hero-separator">/</span>
