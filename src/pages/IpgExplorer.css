@@ -86,7 +86,7 @@
 }
 
 .ipg-sidebar {
-  height: calc(100vh - 120px);
+  height: calc(100vh - 60px);
   border-radius: 30px;
   border: 1px solid #e4e4e8;
   background: rgba(255, 255, 255, 0.92);
@@ -148,7 +148,7 @@
 }
 
 .sidebar-scroll {
-  height: calc(100% - 137px);
+  height: calc(100%);
   overflow: auto;
   padding: 16px 16px 48px;
   box-sizing: border-box;

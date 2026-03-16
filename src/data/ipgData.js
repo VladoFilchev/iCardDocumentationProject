@@ -273,7 +273,7 @@ export const ipgContent = {
     title: "Signatures",
     subtitle: "General",
     description:
-      "IPG 4.5 uses a new signature algorithm. All requests, callbacks, and responses must be signed and verified using RSA with SHA-256.",
+      "IPG 4.5 uses a new signature algorithm. All requests, callbacks, and responses must be signed and verified using RSA with SHA-256.\n Note that after key generation, you need to provide us with your newly generated public key, afterwards we will provide you with iCard's public key. ",
     facts: [
       "New 4.5 signature algorithm",
       "RSA + SHA-256",
@@ -314,9 +314,32 @@ link: {
       ["12. Base64 encode", "step", "Returned", "The generated signature is Base64-encoded and appended as Signature."],
     ],
     body: [
-      "This is one of the most important integration differences in protocol 4.5.",
-      "If an implementation still uses an older request-signing model, request validation will fail.",
-      "The safest approach is to build the canonical string in one place and use the exact same logic for request creation and response verification.",
+      "This is one of the most important protocol changes in IPG 4.5.",
+  "If an implementation still follows an older signing model, request validation will fail.",
+  "The safest approach is to generate the canonical string in one place and reuse the same logic for request signing and response verification.",
+
+  "The signing input includes:",
+  "• Request data without the Signature parameter.",
+  "• The private key used for signing.",
+
+  "The algorithm steps are:",
+  "1. Validate input.",
+  "• Ensure the request does not contain Signature, even as an empty field.",
+  "• Ensure the private key is available.",
+
+  "2. Normalize and prepare data.",
+  "• Convert all keys to lowercase.",
+  "• Convert Boolean values: false → 0, true → 1.",
+  "• Transform each parameter into: <parent_1>:...:<parent_n>:<parameter_name>:<parameter_value>.",
+  "• Keep empty values empty.",
+  "• Add zero-based indexes to array elements.",
+  "• Ignore empty arrays.",
+  "• Convert all strings to UTF-8.",
+  "• Sort all strings in natural order and join them with semicolons (;).",
+
+  "3. Calculate the SHA-256 signature.",
+  "4. Base64-encode the signature.",
+  "5. Add the Signature parameter to the request body.",
     ],
   },
 
@@ -331,9 +354,31 @@ link: {
       "Use the exact 4.5 canonical algorithm",
     ],
     body: [
-      "No callback or backend response should be trusted before signature verification succeeds.",
-      "The implementation must rebuild the canonical string from the returned payload using the 4.5 normalization and sorting rules.",
-      "The returned Base64 signature is then verified against the SHA-256 hash of the canonical string using the iCard public key.",
+       "No callback or backend response should be trusted before signature verification succeeds.",
+  "The implementation must rebuild the canonical string from the returned payload using the IPG 4.5 normalization and sorting rules.",
+  "The returned Base64 signature is then verified against the SHA-256 hash of that canonical string by using the iCard public key.",
+
+  "Verification input includes:",
+  "• The callback or response payload containing the Signature parameter.",
+  "• The iCard public key used for verification.",
+
+  "Verification steps are:",
+  "1. Validate input.",
+  "• Ensure the payload is valid JSON.",
+  "• Ensure the Signature parameter is present.",
+  "• Ensure the public key is available.",
+
+  "2. Extract the signature.",
+  "• Read the Signature value.",
+  "• Remove Signature from the payload.",
+  "• Decode the signature from Base64.",
+
+  "3. Rebuild the canonical string.",
+  "• Apply the same IPG 4.5 normalization, UTF-8 conversion, natural sorting, and semicolon join rules used in signature generation.",
+
+  "4. Verify the signature.",
+  "• Calculate the SHA-256 hash of the canonical string.",
+  "• Verify the decoded signature with the iCard public key.",
     ],
   },
 
