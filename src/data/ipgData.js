@@ -134,6 +134,9 @@ export const ipgMenu = [
       { id: "ipg-signature-generation", label: "Signature generation", type: "guide" },
       { id: "ipg-signature-verification", label: "Signature verification", type: "guide" },
       { id: "ipg-callbacks", label: "Callbacks", type: "guide" },
+      {id: "ipg-resending-callbacks", label: "Resending Callbacks", type: "guide"},
+      {id: "ipg-troubleshooting-callbacks", label: "Troubleshooting Callbacks", type: "guide"},
+      {id: "ipg-commoncases-callbacks", label: "Common Cases", type: "guide"},
       { id: "ipg-callback-payment", label: "Callback object · Payment", type: "schema" },
       { id: "ipg-callback-carddata", label: "Callback object · CardData", type: "schema" },
       { id: "ipg-callback-customer", label: "Callback object · Customer", type: "schema" },
@@ -341,6 +344,24 @@ link: {
   "4. Base64-encode the signature.",
   "5. Add the Signature parameter to the request body.",
     ],
+
+    example: `IPGmethod => IPGPurchase
+KeyIndex => 1
+KeyIndexResp => 1
+IPGVersion => 4.5
+Language => en
+Originator => 33
+BannerIndex => 1
+MID => 000000000000113
+Currency => 975
+MIDName => IPG TEST 4.5
+CustomerIP => 127.0.0.1
+OrderID => 8A540554-1551-4533-B246-42CAD55EE8DE
+CustomerIdentifier => SZ-1868
+BoolExample => true
+EmptyExample => 
+Signature => PNYhiEtXvwTB2ixMID+hYuJIc7+VUlYcQzyH9xXTSGm2K7NiSNBe9oYeyv0Bi0e==
+`
   },
 
   "ipg-signature-verification": {
@@ -380,6 +401,28 @@ link: {
   "• Calculate the SHA-256 hash of the canonical string.",
   "• Verify the decoded signature with the iCard public key.",
     ],
+    example: `PHP
+$result = openssl_verify($dataToVerify, base64_decode($signature), $publicKey);
+If ($result)
+{
+//success
+}
+Else
+{
+//failed
+}
+C#
+var sha = SHA256.Create();
+var result = verifyKey.VerifyHash(sha.ComputeHash(Encoding.UTF8.GetBytes(dataToVerify)),
+Convert.FromBase64String(signature), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+If (result)
+{
+//success
+}
+Else
+{
+//failed
+}`
   },
 
   "ipg-callbacks": {
@@ -395,10 +438,134 @@ link: {
     ],
     body: [
       "Version 4.5 replaced the old Notify method pattern with JSON callbacks.",
-      "The callback is sent to URL_Notify and must be accepted, signature-verified, and acknowledged with HTTP 200 OK.",
-      "If the merchant does not return 200 OK, the callback is resent.",
       "The browser redirect back to the merchant OK or Cancel page uses GET and carries no payload, so redirect handling must not be treated as the only payment confirmation mechanism.",
+      "A callback is an HTTP POST message sent to the merchant URL provided in the request.",
+"The recommended callback handling flow includes three main steps:",
+
+"1. Accept and verify the callback.",
+"• Accept callbacks only from the IPG platform IP addresses provided by iCard.",
+"• Always verify the callback signature before trusting the payload.",
+
+"2. Confirm callback receipt.",
+"• Return HTTP 200 OK when the callback is accepted successfully.",
+"• Return an appropriate error code if processing fails, for example 400 Bad Request or 500 Internal Server Error.",
+"• If HTTP 200 OK is not returned, the callback will be sent again.",
+
+"3. Perform the required actions.",
+"• Execute the business action required by the callback.",
+"• For example, update transaction status, store the result, or notify the customer.",
     ],
+  },
+
+  "ipg-resending-callbacks": {
+    title: "Resending Callbacks",
+    subtitle: "Callbacks",
+    description:
+  "If the information about a callback receipt error has been communicated to the payment platform or the callback receipt has not been confirmed, this callback is sent again.",
+
+    body:[
+"Callback retries are automatic if the merchant does not return HTTP 200 OK.",
+"The retry schedule is generally as follows:",
+"• 20 attempts every 60 seconds.",
+"• 8 attempts every 300 seconds.",
+"• 6 attempts every 600 seconds.",
+"• 6 attempts every 1200 seconds.",
+"• 6 attempts every 3600 seconds.",
+"• 7 attempts every 7200 seconds.",
+"In total, up to 53 delivery attempts may be made for the same callback event.",
+"After that, no further retries are sent.",
+"In general, the automatic callback delivery period does not exceed 1 day.",
+    ]
+  },
+
+  "ipg-troubleshooting-callbacks": {
+    title: "Troubleshooting Callbacks",
+    subtitle: "Callbacks",
+    description:
+  "Troubleshooting IPG Callbacks which have not been received.",
+       link: 
+  {
+label: "cs.support@icard.com",
+  href: "mailto:cs.support@icard.com",
+  },
+
+    body:[
+"There may be cases where callbacks are not received at the specified URLs.",
+"The most common reasons are missing trigger events, communication issues, or incorrect callback URLs.",
+"In such cases, the recommended steps are:",
+"1. Make sure the correct requests were sent and accepted by the platform, and that callbacks were not disabled.",
+"2. If the requests were accepted but no callbacks were received, verify that the callback URLs are correct.",
+"3. If the issue remains unresolved, contact iCard technical integration support.",
+
+    ],
+    
+  },
+
+  "ipg-commoncases-callbacks": {
+    title: "Common Cases",
+    subtitle: "General",
+    description:
+      "Common use cases describe the most typical payment outcomes and validation scenarios that merchants should be prepared to handle in an IPG 4.5 integration.",
+    facts: [
+      "JSON callbacks",
+      "Callbacks are resent until 200 OK",
+      "Merchant OK/Cancel redirect is GET without payload",
+      "Callbacks are the backend source of truth",
+    ],
+    body: [
+      "Declined 3DS – frictionless flow",
+"This case occurs when the 3DS authentication is processed without a challenge step, but the transaction is still declined during validation or risk assessment.",
+
+"Failed merchant validation",
+"This means the request was rejected because the merchant data, signature, configuration, or required request parameters did not pass platform validation.",
+
+"Declined 3DS – challenge flow",
+"This case occurs when the customer is sent through an active 3DS challenge, but the authentication or the final payment result is unsuccessful.",
+
+"Failed merchant validation",
+"In this scenario, the payment flow cannot continue because the merchant request fails technical or configuration checks before successful processing.",
+
+"Declined payment",
+"This means the payment request reached processing, but the final result was declined by the issuer, scheme rules, risk checks, or another payment-side validation step.",
+
+"Successful payment",
+"This means the payment was processed successfully, the transaction was approved, and the merchant can continue with order confirmation or post-payment actions.",
+    ],
+    example: `Failed merchant validation
+    
+    {
+"Payment": {
+"OrderId": "1A3BBFE5-78B4-46C6-900A-853006365A08",
+"MID": "000000000000112",
+"Date": "2025-05-14T10:40:11+03:00",
+"Type": "IPGPurchase",
+"Context": "",
+"Status": "declined",
+"Sum": {
+"Amount": "1.00",
+"Currency": 978
+},
+"Interface": "redirect",
+"Description": "notee"
+},
+"Operation": {
+"Type": "merchant_validation",
+"Status": "declined",
+"Date": "2025-05-14T10:40:11+03:00",
+"Code": 9005,
+"Message": "Invalid parameter"
+},
+"Errors": [
+{
+"Code": 9033,
+"Description": "Invalid banner index",
+"Field": "BannerIndex",
+"Message": "Invalid integer for banner index value"
+}
+],
+"Signature": "RmGl2DCsQba8 .... 3eqNbjXBVSUdb3Lxx9zCWu/M="
+}
+`,
   },
 
   "ipg-callback-payment": {

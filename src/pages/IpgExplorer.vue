@@ -117,7 +117,7 @@
           <div class="code-panel">
             <div class="code-panel-header">
               <div class="code-label">Request</div>
-              <TypeBadge :type="activeMeta?.type" />
+               <span class="mini-label">Request To Send</span>
             </div>
             <pre><code>{{ active?.request || "No request snippet for this section." }}</code></pre>
           </div>
@@ -125,9 +125,17 @@
           <div class="code-panel">
             <div class="code-panel-header">
               <div class="code-label">Response</div>
-              <span class="mini-label">Example</span>
+              <span class="mini-label">Response Message</span>
             </div>
             <pre><code>{{ active?.response || "No response snippet for this section." }}</code></pre>
+          </div>
+
+          <div class="code-panel">
+            <div class="code-panel-header">
+              <div class="code-label">Example</div>
+               <span class="mini-label">Example message</span>
+            </div>
+            <pre><code>{{ active?.example || "No example snippet for this section." }}</code></pre>
           </div>
         </div>
       </aside>
