@@ -565,7 +565,7 @@ const keyFieldDifferencesTable = table(
     ["Callback StoreCard.CardToken description", "Token for subsequent payments when customer saves card", "Token for subsequent payments when customer saves card", "Token used in IPG3DSPurchaseWithStoredCard"],
     ["Google Pay IPGTokenizedCardPurchase availability", "Not applicable; uses redirect", "Full JS SDK flow required", "Full JS SDK flow required"],
     ["Apple Pay IPGTokenProviderSession availability", "Not applicable; uses redirect", "Required for JS SDK flow", "Required for JS SDK flow"],
-    ["IPGGetTxnStatus use case", "For IPGOCT timeouts only", "For IPGFundsDisbursement timeouts only", "Not applicable"],
+    ["IPGGetTxnStatus use case", "For IPGOCT", "For IPGFundsDisbursement", "Not applicable"],
   ]
 );
 const protocolChangesTable = table(
@@ -1390,7 +1390,7 @@ Signature=<base64-signature>`,
     title: "IPGGetTxnStatus",
     subtitle: "Backend Methods",
     description:
-      "Retrieves the current status of a previously executed backend payment. Use only for timeout handling, not as a callback substitute.",
+      "Retrieves the current status of a previously executed backend payment. Can be used for checking the transaction status for IPGOCT / IPGFundsDisbursement",
     facts: ["BM Gambling", "BM Credit Institution", "Timeout diagnostics", "Not for ECommerce"],
     availability: availability(true, true, false),
     fieldSections: [
