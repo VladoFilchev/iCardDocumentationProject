@@ -116,6 +116,41 @@
           </div>
         </section>
 
+        <section v-if="active.resources?.length" class="doc-section">
+          <h2>Resources</h2>
+          <div class="resource-grid">
+            <a
+              v-for="resource in active.resources"
+              :key="resource.href"
+              :href="resource.href"
+              target="_blank"
+              rel="noreferrer"
+              class="resource-card"
+            >
+              <span class="resource-type">{{ resource.type || "PDF" }}</span>
+              <strong>{{ resource.title }}</strong>
+              <span>{{ resource.description }}</span>
+            </a>
+          </div>
+        </section>
+
+        <section v-if="active.media?.length" class="doc-section">
+          <h2>Visuals</h2>
+          <div class="media-grid">
+            <figure
+              v-for="item in active.media"
+              :key="item.src"
+              class="media-frame"
+            >
+              <img :src="item.src" :alt="item.alt || item.title" />
+              <figcaption>
+                <strong>{{ item.title }}</strong>
+                <span v-if="item.description">{{ item.description }}</span>
+              </figcaption>
+            </figure>
+          </div>
+        </section>
+
         <section v-if="active.fields?.length" class="doc-section">
           <h2>Fields</h2>
           <FieldsTable
