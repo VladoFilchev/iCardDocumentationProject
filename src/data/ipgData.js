@@ -507,8 +507,7 @@ const retryScheduleTable = table(
     ["6", "3600 seconds (1 hour)", "About 10 hours"],
     ["7", "7200 seconds (2 hours)", "About 24 hours max"],
   ],
-  "If the merchant does not return HTTP 200 OK, IPG retries the callback up to 53 times within one day.",
-  "After 24 hours, if we haven't received 200 OK, we will reach you to request further information regarding the transaction."
+  "If the merchant does not return HTTP 200 OK, IPG retries the callback up to 53 times within one day. After 24 hours, if we haven't received 200 OK, we will reach you to request further information regarding the transaction."
 );
 const featureMatrixTable = table(
   "Feature Matrix",
