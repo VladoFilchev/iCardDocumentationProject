@@ -1,5 +1,11 @@
 <template>
-  <div class="ipg-page">
+  <div
+    :class="[
+      'ipg-page',
+      selectedVersion !== '4.5' ? 'ipg-page-legacy' : '',
+      selectedBusinessModel !== 'all' ? 'ipg-page-focused-model' : '',
+    ]"
+  >
     <header class="ipg-topbar">
       <div class="ipg-topbar-left">
         <button class="back-btn" @click="goBackToLanding">
@@ -13,12 +19,87 @@
       </div>
 
       <div class="top-tags">
-        <span class="top-tag">Protocol 4.5</span>
-        <span class="top-tag">All business models</span>
+        <div class="version-select">
+          <button
+            class="version-button"
+            type="button"
+            :aria-expanded="isVersionMenuOpen"
+            aria-haspopup="listbox"
+            @click="toggleVersionMenu"
+          >
+            <span>{{ selectedVersionMeta.label }}</span>
+            <strong>{{ selectedVersionMeta.status }}</strong>
+            <span class="version-caret">v</span>
+          </button>
+
+          <div
+            v-if="isVersionMenuOpen"
+            class="version-menu"
+            role="listbox"
+          >
+            <button
+              v-for="version in ipgVersions"
+              :key="version.id"
+              type="button"
+              :class="[
+                'version-option',
+                selectedVersion === version.id ? 'version-option-active' : '',
+              ]"
+              role="option"
+              :aria-selected="selectedVersion === version.id"
+              @click="selectVersion(version.id)"
+            >
+              <span>
+                <strong>{{ version.label }}</strong>
+                <small>{{ version.description }}</small>
+              </span>
+              <em>{{ version.status }}</em>
+            </button>
+          </div>
+        </div>
+
+        <div class="version-select model-select">
+          <button
+            class="version-button model-button"
+            type="button"
+            :aria-expanded="isBusinessModelMenuOpen"
+            aria-haspopup="listbox"
+            @click="toggleBusinessModelMenu"
+          >
+            <span>{{ selectedBusinessModelMeta.label }}</span>
+            <strong>{{ selectedBusinessModelMeta.status }}</strong>
+            <span class="version-caret">v</span>
+          </button>
+
+          <div
+            v-if="isBusinessModelMenuOpen"
+            class="version-menu model-menu"
+            role="listbox"
+          >
+            <button
+              v-for="model in ipgBusinessModels"
+              :key="model.id"
+              type="button"
+              :class="[
+                'version-option',
+                selectedBusinessModel === model.id ? 'version-option-active' : '',
+              ]"
+              role="option"
+              :aria-selected="selectedBusinessModel === model.id"
+              @click="selectBusinessModel(model.id)"
+            >
+              <span>
+                <strong>{{ model.label }}</strong>
+                <small>{{ model.description }}</small>
+              </span>
+              <em>{{ model.status }}</em>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
-    <div class="ipg-layout">
+    <div :class="['ipg-layout', !hasCodeContent ? 'ipg-layout-no-code' : '']">
       <aside class="ipg-sidebar">
         <div class="sidebar-brand">
           <img src="/logo.png" alt="iCard logo" class="sidebar-logo" />
@@ -51,7 +132,7 @@
                   'sidebar-item',
                   activeId === item.id ? 'sidebar-item-active' : '',
                 ]"
-                @click="activeId = item.id"
+                @click="selectSection(item.id)"
               >
                 <TypeBadge :type="item.type" />
                 <span>{{ item.label }}</span>
@@ -199,30 +280,30 @@
         </section>
       </main>
 
-      <aside class="ipg-codebar">
+      <aside v-if="hasCodeContent" class="ipg-codebar">
         <div class="codebar-sticky">
-          <div class="code-panel">
+          <div v-if="hasRequestSnippet" class="code-panel">
             <div class="code-panel-header">
               <div class="code-label">Request</div>
               <span class="mini-label">Request To Send</span>
             </div>
-            <pre><code>{{ active.request || "No request snippet for this section." }}</code></pre>
+            <pre><code>{{ active.request }}</code></pre>
           </div>
 
-          <div class="code-panel">
+          <div v-if="hasResponseSnippet" class="code-panel">
             <div class="code-panel-header">
               <div class="code-label">Response</div>
               <span class="mini-label">Response Message</span>
             </div>
-            <pre><code>{{ active.response || "No response snippet for this section." }}</code></pre>
+            <pre><code>{{ active.response }}</code></pre>
           </div>
 
-          <div class="code-panel">
+          <div v-if="hasExampleSnippet" class="code-panel">
             <div class="code-panel-header">
               <div class="code-label">Example</div>
               <span class="mini-label">Example message</span>
             </div>
-            <pre><code>{{ active.example || "No example snippet for this section." }}</code></pre>
+            <pre><code>{{ active.example }}</code></pre>
           </div>
         </div>
       </aside>
@@ -239,14 +320,22 @@
 <script setup>
 import { ref, computed, watch } from "vue";
 import "./IpgExplorer.css";
-import { ipgMenu, ipgContent } from "../data/ipgData";
+import {
+  ipgMenu,
+  ipgContent,
+  ipgVersions,
+  ipgVersionDocuments,
+  ipgBusinessModels,
+  ipgBusinessModelDocuments,
+} from "../data/ipgData";
 import SiteFooter from "../components/SiteFooter.vue";
 import TypeBadge from "../components/TypeBadge.vue";
 import FieldsTable from "../components/FieldsTable.vue";
 import ContentTable from "../components/ContentTable.vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 const router = useRouter();
+const route = useRoute();
 
 function goBackToLanding() {
   router.push("/");
@@ -276,26 +365,130 @@ const sectionAliases = {
   "pm-callbacks": "ipg-tokenized-card-purchase",
 };
 
+const versionSummaryId = "ipg-version-summary";
+
 function normalizeSectionId(value) {
   return sectionAliases[value] || value || "ipg-overview";
 }
 
+function normalizeVersion(value) {
+  const version = Array.isArray(value) ? value[0] : value;
+  return ipgVersions.some((item) => item.id === version) ? version : "4.5";
+}
+
+function normalizeBusinessModel(value) {
+  const model = Array.isArray(value) ? value[0] : value;
+  return ipgBusinessModels.some((item) => item.id === model) ? model : "all";
+}
+
 const activeId = ref(normalizeSectionId(props.initialActiveId));
+const selectedVersion = ref(normalizeVersion(route.query.version));
+const selectedBusinessModel = ref(normalizeBusinessModel(route.query.model));
+const isVersionMenuOpen = ref(false);
+const isBusinessModelMenuOpen = ref(false);
 const query = ref("");
+
+const selectedVersionMeta = computed(() => {
+  return ipgVersions.find((version) => version.id === selectedVersion.value) || ipgVersions[0];
+});
+
+const selectedBusinessModelMeta = computed(() => {
+  return ipgBusinessModels.find((model) => model.id === selectedBusinessModel.value) || ipgBusinessModels[0];
+});
+
+const selectedBusinessModelConfig = computed(() => {
+  return ipgBusinessModelDocuments[selectedBusinessModel.value] || ipgBusinessModelDocuments.all;
+});
+
+const selectedBusinessModelDocument = computed(() => {
+  const modelConfig = selectedBusinessModelConfig.value;
+  const versionDocument =
+    modelConfig.versions?.[selectedVersion.value] ||
+    modelConfig.versions?.[modelConfig.defaultVersion] ||
+    ipgBusinessModelDocuments.all.versions?.[selectedVersion.value] ||
+    ipgBusinessModelDocuments.all.versions["4.5"];
+
+  return {
+    ...versionDocument,
+    defaultSection: modelConfig.defaultSection || versionDocument.defaultSection || "ipg-overview",
+    summary:
+      modelConfig.summaries?.[selectedVersion.value] ||
+      versionDocument.summary ||
+      ipgVersionDocuments[selectedVersion.value]?.summary ||
+      ipgVersionDocuments["4.5"].summary,
+  };
+});
+
+const currentMenu = computed(() => selectedBusinessModelDocument.value.menu || ipgMenu);
+const currentContent = computed(() => selectedBusinessModelDocument.value.content || ipgContent);
+
+function isSectionAvailable(sectionId) {
+  if (sectionId === versionSummaryId) return true;
+  return (
+    Boolean(currentContent.value[sectionId]) &&
+    currentMenu.value.some((group) => group.items.some((item) => item.id === sectionId))
+  );
+}
+
+function getDefaultSection() {
+  return selectedBusinessModelDocument.value.defaultSection || currentMenu.value[0]?.items?.[0]?.id || "ipg-overview";
+}
+
+function coerceSection(sectionId) {
+  const normalized = normalizeSectionId(sectionId);
+  return isSectionAvailable(normalized) ? normalized : getDefaultSection();
+}
+
+activeId.value = coerceSection(activeId.value);
 
 watch(
   () => props.initialActiveId,
   (newValue) => {
-    activeId.value = normalizeSectionId(newValue);
+    activeId.value = coerceSection(newValue);
   }
 );
 
+watch(
+  () => route.query.version,
+  (newValue) => {
+    selectedVersion.value = normalizeVersion(newValue);
+  }
+);
+
+watch(
+  () => route.query.model,
+  (newValue) => {
+    selectedBusinessModel.value = normalizeBusinessModel(newValue);
+  }
+);
+
+watch([selectedBusinessModel, selectedVersion], () => {
+  activeId.value = coerceSection(activeId.value);
+});
+
+const versionedMenu = computed(() => [
+  ...currentMenu.value,
+  {
+    title: "Version Summary",
+    items: [
+      {
+        id: versionSummaryId,
+        label:
+          selectedBusinessModel.value === "all"
+            ? `${selectedVersionMeta.value.label} summary`
+            : `${selectedBusinessModelMeta.value.label} ${selectedVersionMeta.value.label} summary`,
+        type: "schema",
+      },
+    ],
+  },
+]);
+
 const filteredMenu = computed(() => {
-  if (!query.value.trim()) return ipgMenu;
+  if (!query.value.trim()) return versionedMenu.value;
 
   const q = query.value.toLowerCase();
 
-  return ipgMenu
+  return versionedMenu.value
     .map((group) => ({
       ...group,
       items: group.items.filter((item) =>
@@ -305,23 +498,94 @@ const filteredMenu = computed(() => {
     .filter((group) => group.items.length > 0);
 });
 
-const allItems = computed(() => ipgMenu.flatMap((group) => group.items));
+const allItems = computed(() => versionedMenu.value.flatMap((group) => group.items));
 
 const activeMeta = computed(() => {
   return allItems.value.find((item) => item.id === activeId.value) || allItems.value[0];
 });
 
 const active = computed(() => {
-  const fallbackId = activeMeta.value?.id || "ipg-overview";
-  return ipgContent[activeId.value] || ipgContent[fallbackId] || ipgContent["ipg-overview"];
+  if (activeId.value === versionSummaryId) {
+    return selectedBusinessModelDocument.value.summary;
+  }
+
+  const fallbackId = activeMeta.value?.id || getDefaultSection();
+  return currentContent.value[activeId.value] || currentContent.value[fallbackId] || currentContent.value[getDefaultSection()];
 });
+
+function hasSnippet(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+const hasRequestSnippet = computed(() => hasSnippet(active.value?.request));
+const hasResponseSnippet = computed(() => hasSnippet(active.value?.response));
+const hasExampleSnippet = computed(() => hasSnippet(active.value?.example));
+const hasCodeContent = computed(
+  () => hasRequestSnippet.value || hasResponseSnippet.value || hasExampleSnippet.value
+);
+
+function updateIpgRoute(nextQuery) {
+  router.replace({
+    path: "/ipg",
+    query: {
+      ...route.query,
+      ...nextQuery,
+    },
+  });
+}
+
+function selectSection(sectionId) {
+  const normalized = coerceSection(sectionId);
+  activeId.value = normalized;
+  updateIpgRoute({
+    section: normalized,
+    version: selectedVersion.value,
+    model: selectedBusinessModel.value,
+  });
+}
+
+function selectVersion(versionId) {
+  const normalized = normalizeVersion(versionId);
+  selectedVersion.value = normalized;
+  isVersionMenuOpen.value = false;
+  const nextSection = coerceSection(activeId.value);
+  activeId.value = nextSection;
+  updateIpgRoute({
+    section: nextSection,
+    version: normalized,
+    model: selectedBusinessModel.value,
+  });
+}
+
+function selectBusinessModel(modelId) {
+  const normalized = normalizeBusinessModel(modelId);
+  selectedBusinessModel.value = normalized;
+  isBusinessModelMenuOpen.value = false;
+  const nextSection = coerceSection(activeId.value);
+  activeId.value = nextSection;
+  updateIpgRoute({
+    section: nextSection,
+    version: selectedVersion.value,
+    model: normalized,
+  });
+}
+
+function toggleVersionMenu() {
+  isVersionMenuOpen.value = !isVersionMenuOpen.value;
+  if (isVersionMenuOpen.value) isBusinessModelMenuOpen.value = false;
+}
+
+function toggleBusinessModelMenu() {
+  isBusinessModelMenuOpen.value = !isBusinessModelMenuOpen.value;
+  if (isBusinessModelMenuOpen.value) isVersionMenuOpen.value = false;
+}
 
 function onOpenApi(apiName) {
   if (apiName === "WPA") router.push("/wpa");
-  else if (apiName === "IPG") router.push({ path: "/ipg", query: { section: "ipg-overview" } });
-  else if (apiName === "Payment Methods") router.push({ path: "/ipg", query: { section: "ipg-payment-availability" } });
-  else if (apiName === "Apple Pay") router.push({ path: "/ipg", query: { section: "ipg-apple-pay" } });
-  else if (apiName === "Google Pay") router.push({ path: "/ipg", query: { section: "ipg-google-pay" } });
+  else if (apiName === "IPG") router.push({ path: "/ipg", query: { section: getDefaultSection(), version: selectedVersion.value, model: selectedBusinessModel.value } });
+  else if (apiName === "Payment Methods") router.push({ path: "/ipg", query: { section: "ipg-payment-availability", version: selectedVersion.value, model: selectedBusinessModel.value } });
+  else if (apiName === "Apple Pay") router.push({ path: "/ipg", query: { section: "ipg-apple-pay", version: selectedVersion.value, model: selectedBusinessModel.value } });
+  else if (apiName === "Google Pay") router.push({ path: "/ipg", query: { section: "ipg-google-pay", version: selectedVersion.value, model: selectedBusinessModel.value } });
   else if (apiName === "Carts") router.push({ path: "/carts", query: { section: "carts-overview" } });
   else if (apiName === "Merchant API") router.push({ path: "/merchant-api", query: { section: "merchant-overview" } });
   else if (apiName === "IPP") router.push({ path: "/ipp", query: { section: "ipp-overview" } });

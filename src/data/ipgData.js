@@ -54,6 +54,18 @@ const resources = {
     href: `${mediaBase}ipg-js-sdk-apay-gpay-ecommerce.pdf`,
     type: "PDF",
   },
+  gamblingApi: {
+    title: "IPG API v4.5 - Business Model Gambling",
+    description: "Source PDF for the focused IPG 4.5 Gambling business model documentation.",
+    href: `${mediaBase}ipg-api-v4-5-rev-4-bmg-20260126.pdf`,
+    type: "PDF",
+  },
+  productionSignatureGenerator: {
+    title: "Production signature generation",
+    description: "Production environment tool for generating asymmetric keys used by IPG request signing.",
+    href: "https://ipg.icard.com/asym_keys/generate",
+    type: "Tool",
+  },
 };
 const media = {
   appleMobileButtons: {
@@ -81,6 +93,7 @@ const media = {
     alt: "Google Pay SDK redirect ECommerce flow",
   },
 };
+
 const commonSignedRequestFields = [
   f("IPGmethod", "IPGPurchase", "String", "Mandatory", "Name of the method requested for execution."),
   f("KeyIndex", "1", "Int", "Mandatory", "Identifier of the private key used for signing the request."),
@@ -588,6 +601,109 @@ const protocolChangesTable = table(
     ["Error codes", "New error codes and messages added."],
   ]
 );
+
+export const ipgVersionDocuments = {
+  "4.2": {
+    id: "4.2",
+    label: "Protocol 4.2",
+    status: "Legacy",
+    description: "Older legacy integrations. Use only when your merchant setup explicitly requires it.",
+    summary: {
+      title: "IPG 4.2 Summary",
+      subtitle: "Version Summary",
+      description:
+        "Summary page for clients integrating against IPG 4.2 or migrating from 4.2 to the current 4.5 reference.",
+      facts: ["Legacy version", "High-level migration notes", "Compare against 4.5"],
+      body: [
+        "The main documentation sections in this explorer describe the current 4.5 integration model. Use this final page as the version-specific summary for 4.2 integrations.",
+        "If a merchant is still on 4.2, confirm the exact enabled protocol with iCard before implementation. The key migration risks are request signing, callback confirmation, redirect result handling, and renamed token fields.",
+      ],
+      tables: [
+        table(
+          "Key Differences: 4.2 to 4.5",
+          ["Area", "4.2 legacy consideration", "4.5 behavior", "Integration impact"],
+          [
+            ["Signature", "Legacy signing helpers are not compatible with 4.5 as-is.", "RSA-SHA256 canonicalization with lowercased keys, natural sort, and Base64 signature.", "Rebuild signing and verification around the 4.5 canonical string rules."],
+            ["Callbacks", "Older integrations may rely on notify or redirect-side confirmation.", "Signed JSON callbacks to URL_Notify are the backend source of truth.", "Implement callback verification, idempotency, and retry-safe order updates."],
+            ["Redirects", "Older flows may expect result data after redirect.", "URL_OK and URL_Cancel use GET without payment payload.", "Use redirect only for customer navigation, not settlement confirmation."],
+            ["Stored card token", "Older implementations may use Token.", "4.5 uses CardToken.", "Rename request fields and stored-token mappings."],
+            ["Embedded / widget", "Older widget-style integrations may exist.", "Use IPGEmbeddedPayment for embedded checkout.", "Plan a frontend integration update if widgets are present."],
+            ["Modal", "Older token/modal request rules may differ.", "IPGPaymentToken returns the token used by payment-modal.js.", "Review modal bootstrap and URL_Notify handling."],
+            ["Backend operations", "Older backend responses may differ.", "4.5 adds or changes response fields for reversal and payout methods.", "Update parsers, reconciliation, and timeout handling."],
+          ]
+        ),
+      ],
+    },
+  },
+  "4.3": {
+    id: "4.3",
+    label: "Protocol 4.3",
+    status: "Legacy",
+    description: "Legacy integrations should review the 4.3 to 4.5 differences before migration.",
+    summary: {
+      title: "IPG 4.3 Summary",
+      subtitle: "Version Summary",
+      description:
+        "Summary page for clients integrating against IPG 4.3 or migrating from 4.3 to the current 4.5 reference.",
+      facts: ["Legacy version", "Detailed 4.3 to 4.5 differences", "Migration checklist"],
+      body: [
+        "The main documentation sections in this explorer describe the current 4.5 integration model. Use this final page as the version-specific summary for 4.3 integrations.",
+        "The largest changes from 4.3 to 4.5 are the new signing algorithm, JSON callbacks replacing notify methods, redirect confirmation behavior, and the Token to CardToken rename.",
+      ],
+      tables: [
+        table(
+          "Key Differences: 4.3 to 4.5",
+          ["Area", "4.3 behavior", "4.5 behavior", "Integration impact"],
+          [
+            ["Signature", "Older signing algorithm.", "RSA-SHA256 canonicalization with natural sort order.", "Update request signing and response/callback verification helpers."],
+            ["Notifications", "Notify methods were used.", "JSON callbacks to URL_Notify replace notify methods.", "Implement signed JSON callback handling and persistence."],
+            ["Missed notification behavior", "Missed notification could trigger reversal behavior.", "IPG retries callbacks until HTTP 200 OK is received, up to 53 attempts.", "Return the correct HTTP status and make callback processing idempotent."],
+            ["Redirect result", "Redirect behavior could include result data in older flows.", "URL_OK and URL_Cancel redirects use GET and send no payload.", "Do not use browser redirect data as payment confirmation."],
+            ["Token encryption", "Token encryption was required in stored-card, modal, and payout-related methods.", "Token encryption requirement is removed.", "Simplify token handling but keep secure storage controls."],
+            ["CartItems", "CartItems could be required.", "CartItems requirement is removed from all methods.", "Remove CartItems dependency from request builders."],
+            ["FieldsOrder", "Backend responses could include FieldsOrder.", "FieldsOrder is eliminated from backend method responses.", "Do not depend on response ordering metadata."],
+            ["PostResultAction", "Not available in the same form.", "New redirect field with Redirect or CloseWindow values.", "Choose browser behavior explicitly for redirect implementations."],
+            ["Embedded checkout", "Widget integrations existed.", "Widget integrations are removed; use IPGEmbeddedPayment.", "Migrate widget-style integrations to embedded checkout."],
+            ["Stored-card purchase", "Billing address requirements were stricter.", "Billing address fields are no longer mandatory for IPG3DSPurchaseWithStoredCard.", "Review validation rules and remove unnecessary blockers."],
+            ["IPGReversal", "Older request shape.", "OrderID and MID are added.", "Include OrderID and MID in reversal requests."],
+            ["OrderID length", "Older model-specific lengths may differ.", "50 characters except IPGFundsDisbursement in BM CI, which allows 255.", "Validate OrderID length per method and business model."],
+            ["Stored card token parameter", "Token.", "CardToken.", "Rename parameters and update callback/token storage mapping."],
+            ["Payout responses", "Older response parameter set.", "IPGOCT and IPGFundsDisbursement response parameters changed and new fields were added.", "Update response parsers and reconciliation mapping."],
+            ["Error codes", "Older error code catalog.", "New error codes and messages added.", "Refresh error handling and merchant-facing diagnostics."],
+          ]
+        ),
+      ],
+    },
+  },
+  "4.5": {
+    id: "4.5",
+    label: "Protocol 4.5",
+    status: "Current",
+    description: "Current IPG reference and recommended integration target.",
+    summary: {
+      title: "IPG 4.5 Summary",
+      subtitle: "Version Summary",
+      description:
+        "Summary page for the current IPG 4.5 documentation and the main protocol changes introduced from earlier versions.",
+      facts: ["Current version", "Recommended integration target", "All business models"],
+      body: [
+        "Protocol 4.5 is the current documentation set in this explorer. It uses RSA-SHA256 signing, JSON callbacks to URL_Notify, GET redirects without payment payload, and CardToken naming for stored-card flows.",
+        "Use this summary as the final checklist after reviewing the relevant implementation method pages.",
+      ],
+      tables: [protocolChangesTable],
+    },
+  },
+};
+
+export const ipgVersions = Object.values(ipgVersionDocuments).map(
+  ({ id, label, status, description }) => ({
+    id,
+    label,
+    status,
+    description,
+  })
+);
+
 export const ipgMenu = [
   {
     title: "General",
@@ -707,6 +823,7 @@ IPGmethod=IPGPurchase&KeyIndex=1&KeyIndexResp=1&IPGVersion=4.5&...&Signature=<ba
       "Merchant requests are signed with the merchant private key. IPG responses and callbacks are verified with iCard's public key.",
       "Never trust a synchronous response or callback until its Signature has been verified successfully.",
     ],
+    resources: [resources.productionSignatureGenerator],
   },
   "ipg-signature-generation": {
     title: "Signature Generation Algorithm",
@@ -719,6 +836,7 @@ IPGmethod=IPGPurchase&KeyIndex=1&KeyIndexResp=1&IPGVersion=4.5&...&Signature=<ba
       "Lowercase all parameter keys, convert boolean values true/false to 1/0, flatten values into colon-delimited path strings, preserve empty values, index array elements from zero, ignore empty arrays, UTF-8 encode all strings, sort in natural order, and join with semicolons.",
       "Sign the canonical string with SHA-256 using the merchant private key, Base64 encode the binary signature, then append Signature as the last POST parameter.",
     ],
+    resources: [resources.productionSignatureGenerator],
     request: `openssl_sign($dataToSign, $signature, $privateKey, OPENSSL_ALGO_SHA256);
 $base64Signature = base64_encode($signature);`,
     response: `Signature=<base64-signature>`,
@@ -746,6 +864,7 @@ Invalid signature: reject the response or callback`,
     body: [
       "The example starts from an IPGPurchase request, removes Signature, lowercases keys, normalizes BoolExample=true to boolexample:1, preserves EmptyExample as emptyexample:, sorts naturally, and joins with semicolons.",
     ],
+    resources: [resources.productionSignatureGenerator],
     request: `IPGmethod=IPGPurchase
 KeyIndex=1
 KeyIndexResp=1
@@ -1446,5 +1565,540 @@ Signature=<base64-signature>`,
     subtitle: "Business Models",
     description: "Summary of protocol-wide changes introduced in version 4.5.",
     tables: [protocolChangesTable],
+  },
+};
+
+const sharedGeneralItems = [
+  { id: "ipg-http-post", label: "HTTP POST", type: "guide" },
+  { id: "ipg-data-types", label: "Data type formats", type: "schema" },
+  { id: "ipg-security", label: "Security & signatures", type: "guide" },
+  { id: "ipg-signature-generation", label: "Signature generation", type: "guide" },
+  { id: "ipg-signature-verification", label: "Signature verification", type: "guide" },
+  { id: "ipg-signing-example", label: "Step-by-step signing example", type: "guide" },
+];
+
+const modelGeneralGroup = (overviewId) => ({
+  title: "General",
+  items: [
+    { id: overviewId, label: "Overview & Architecture", type: "overview" },
+    ...sharedGeneralItems,
+  ],
+});
+
+const callbackDocumentationGroup = {
+  title: "Callbacks",
+  items: [
+    { id: "ipg-callbacks", label: "Callbacks overview", type: "guide" },
+    { id: "ipg-callback-retries", label: "Handling & retries", type: "guide" },
+    { id: "ipg-callback-payment", label: "Object Payment", type: "schema" },
+    { id: "ipg-callback-carddata", label: "Object CardData", type: "schema" },
+    { id: "ipg-callback-customer", label: "Object Customer", type: "schema" },
+    { id: "ipg-callback-operation", label: "Object Operation", type: "schema" },
+    { id: "ipg-callback-errors", label: "Array Errors", type: "schema" },
+    { id: "ipg-callback-examples", label: "Common callback examples", type: "guide" },
+  ],
+};
+
+const modelImplementationTypesGroup = {
+  title: "Implementation Types",
+  items: [
+    { id: "ipg-redirect-overview", label: "Redirect checkout", type: "guide" },
+    { id: "ipg-embedded-overview", label: "Embedded checkout", type: "guide" },
+    { id: "ipg-modal-overview", label: "Modal implementation", type: "guide" },
+    { id: "ipg-wallet-overview", label: "Wallet JS SDK overview", type: "guide" },
+    { id: "ipg-apple-pay", label: "Apple Pay JS SDK", type: "guide" },
+    { id: "ipg-google-pay", label: "Google Pay JS SDK", type: "guide" },
+    { id: "ipg-wallet-sdk", label: "JS SDK setup", type: "guide" },
+  ],
+};
+
+const modelApiMethodsGroup = {
+  title: "API Methods",
+  items: [
+    { id: "ipg-purchase", label: "IPGPurchase", type: "post" },
+    { id: "ipg-3ds-stored", label: "IPG3DSPurchaseWithStoredCard", type: "post" },
+    { id: "ipg-embedded-purchase", label: "IPGEmbeddedPayment - IPGPurchase", type: "post" },
+    { id: "ipg-embedded-stored", label: "IPGEmbeddedPayment - Stored Card", type: "post" },
+    { id: "ipg-payment-token-purchase", label: "IPGPaymentToken - IPGPurchase", type: "post" },
+    { id: "ipg-payment-token-stored", label: "IPGPaymentToken - Stored Card", type: "post" },
+    { id: "ipg-token-provider-session", label: "IPGTokenProviderSession", type: "post" },
+    { id: "ipg-tokenized-card-purchase", label: "IPGTokenizedCardPurchase", type: "post" },
+  ],
+};
+
+const modelBusinessModelsGroup = (functionScopeId) => ({
+  title: "Business Models",
+  items: [
+    { id: functionScopeId, label: "Function scope", type: "schema" },
+    { id: "ipg-business-models", label: "Master comparison", type: "schema" },
+    { id: "ipg-feature-matrix", label: "Feature matrix", type: "schema" },
+    { id: "ipg-payment-availability", label: "Payment method availability", type: "schema" },
+    { id: "ipg-key-field-differences", label: "Key field differences", type: "schema" },
+    { id: "ipg-protocol-changes", label: "4.3 to 4.5 changes", type: "schema" },
+  ],
+});
+
+const gamblingImplementationTable = table(
+  "Gambling Implementations and API Functions",
+  ["Implementation", "Applicable API function calls"],
+  [
+    ["Redirect checkout", "IPGPurchase, IPG3DSPurchaseWithStoredCard"],
+    ["Embedded checkout", "IPGEmbeddedPayment with PaymentType IPGPurchase or IPG3DSPurchaseWithStoredCard"],
+    ["Modal implementation", "IPGPaymentToken with ModalType IPGPurchase or IPG3DSPurchaseWithStoredCard"],
+    ["Google Pay redirect", "Google Pay availability check on merchant page, then IPGPurchase with IPGPaymentContext=GooglePay"],
+    ["Apple Pay redirect", "Apple Pay availability check on merchant page, then IPGPurchase with IPGPaymentContext=ApplePay"],
+    ["Apple Pay only JS SDK", "IPGTokenProviderSession, then IPGTokenizedCardPurchase"],
+    ["Backend implementation", "IPGOCT, IPGGetTxnStatus, IPGReversal"],
+  ]
+);
+
+const gamblingRequiredMethodsTable = table(
+  "Gambling Function Scope",
+  ["Function", "When it is required", "Purpose"],
+  [
+    ["IPGPurchase", "Required for redirect card deposits and wallet redirect deposits.", "Starts a customer payment/deposit flow."],
+    ["IPG3DSPurchaseWithStoredCard", "Required only when the merchant supports stored-card deposits.", "Processes a stored CardToken with full 3DS verification."],
+    ["IPGEmbeddedPayment", "Required only for embedded checkout.", "Returns the iframe URL for card or stored-card payment."],
+    ["IPGPaymentToken", "Required only for modal checkout.", "Returns the token used by payment-modal.js."],
+    ["IPGTokenProviderSession", "Required for Apple Pay only JS SDK.", "Creates the Apple Pay merchant session through IPG."],
+    ["IPGTokenizedCardPurchase", "Required for Apple Pay only JS SDK final payment.", "Processes the tokenized wallet payment."],
+    ["IPGOCT", "Required when the merchant supports gaming withdrawals to card.", "Executes the Original Credit Transaction payout."],
+    ["IPGGetTxnStatus", "Recommended for OCT timeout/reference checks.", "Reads the status of a previously executed OCT by OrderID."],
+    ["IPGReversal", "Mandatory for all merchants.", "Reverses a previously executed payment before settlement."],
+  ]
+);
+
+const financialInstitutionRequiredMethodsTable = table(
+  "Financial Institution Function Scope",
+  ["Function", "When it is required", "Purpose"],
+  [
+    ["IPGPurchase", "Required for card payment flows supported by the merchant setup.", "Starts a customer payment flow."],
+    ["IPG3DSPurchaseWithStoredCard", "Required only when stored-card payment is supported.", "Processes a stored CardToken with full 3DS verification."],
+    ["IPGEmbeddedPayment", "Required only for embedded checkout.", "Returns the iframe URL for card or stored-card payment."],
+    ["IPGPaymentToken", "Required only for modal checkout.", "Returns the token used by payment-modal.js."],
+    ["IPGTokenProviderSession", "Required for Apple Pay JS SDK.", "Creates the Apple Pay merchant session through IPG."],
+    ["IPGTokenizedCardPurchase", "Required for Apple Pay or Google Pay JS SDK final payment.", "Processes the tokenized wallet payment."],
+    ["IPGFundsDisbursement", "Required for Financial Institution payout/disbursement flows.", "Disburses funds to a cardholder card."],
+    ["IPGGetTxnStatus", "Recommended for backend timeout/reference checks.", "Reads the status of a previously executed backend transaction by OrderID."],
+    ["IPGReversal", "Mandatory where a previous payment must be reversed before settlement.", "Reverses a previously executed payment."],
+  ]
+);
+
+const ecommerceRequiredMethodsTable = table(
+  "ECommerce Function Scope",
+  ["Function", "When it is required", "Purpose"],
+  [
+    ["IPGPurchase", "Required for regular card payments.", "Starts a customer payment flow."],
+    ["IPG3DSPurchaseWithStoredCard", "Required only when stored-card payment is supported.", "Processes a stored CardToken with full 3DS verification."],
+    ["IPGEmbeddedPayment", "Required only for embedded checkout.", "Returns the iframe URL for card or stored-card payment."],
+    ["IPGPaymentToken", "Required only for modal checkout.", "Returns the token used by payment-modal.js."],
+    ["IPGTokenProviderSession", "Required for Apple Pay JS SDK.", "Creates the Apple Pay merchant session through IPG."],
+    ["IPGTokenizedCardPurchase", "Required for Apple Pay or Google Pay JS SDK final payment.", "Processes the tokenized wallet payment."],
+    ["IPGRefund", "Required when the merchant supports post-payment refunds.", "Refunds a previously executed payment."],
+    ["IPGReversal", "Mandatory where a previous payment must be reversed before settlement.", "Reverses a previously executed payment."],
+  ]
+);
+
+const gamblingWalletContextTable = table(
+  "Gambling Wallet Redirect Contexts",
+  ["Wallet", "Frontend check", "IPG request"],
+  [
+    ["Google Pay", "Use the iCard JS SDK to check Google Pay availability on the merchant page.", "Send IPGPurchase with IPGPaymentContext=GooglePay."],
+    ["Apple Pay redirect", "Use the iCard JS SDK to check Apple Pay availability on the merchant page.", "Send IPGPurchase with IPGPaymentContext=ApplePay."],
+    ["Apple Pay only SDK", "Use Apple Pay on the deposit page.", "Create IPGTokenProviderSession, then send IPGTokenizedCardPurchase."],
+  ]
+);
+
+const scopedVersionSummary = (modelLabel, versionId, facts = []) => {
+  const base = ipgVersionDocuments[versionId].summary;
+
+  return {
+    ...base,
+    title: `${modelLabel} ${base.title}`,
+    facts: [modelLabel, ...facts, ...base.facts],
+    body: [
+      `This final page summarizes version-specific differences for the ${modelLabel} selection. The regular documentation pages stay focused on the applicable functions instead of repeating migration notes on every page.`,
+      ...base.body,
+    ],
+  };
+};
+
+const gamblingVersion45Summary = {
+  title: "Gambling IPG 4.5 Summary",
+  subtitle: "Version Summary",
+  description:
+    "Final checklist for Gambling merchants integrating IPG protocol 4.5.",
+  facts: ["BM Gambling", "Protocol 4.5", "Deposit and withdrawal flows", "Mandatory reversal"],
+  body: [
+    "The Gambling 4.5 documentation set includes only the functions applicable to BM Gambling: deposit checkout methods, wallet deposit options, OCT withdrawal, OCT status reference, and reversal.",
+    "Use the regular pages for implementation details, then use this final summary to confirm the applicable functions and the protocol changes from earlier versions.",
+  ],
+  tables: [gamblingRequiredMethodsTable, protocolChangesTable],
+};
+
+const gamblingMenu = [
+  modelGeneralGroup("ipg-gambling-overview"),
+  callbackDocumentationGroup,
+  modelImplementationTypesGroup,
+  modelApiMethodsGroup,
+  {
+    title: "Backend Methods",
+    items: [
+      { id: "ipg-oct", label: "IPGOCT", type: "post" },
+      { id: "ipg-reversal", label: "IPGReversal", type: "post" },
+      { id: "ipg-get-status", label: "IPGGetTxnStatus", type: "post" },
+    ],
+  },
+  modelBusinessModelsGroup("ipg-gambling-functions"),
+];
+
+const gamblingContent = {
+  ...ipgContent,
+  "ipg-overview": {
+    title: "IPG 4.5 - Gambling Business Model",
+    subtitle: "Business Model",
+    description:
+      "Focused IPG 4.5 reference for Gambling merchants, including only the applicable checkout, wallet, backend, callback, and signature sections.",
+    facts: ["Protocol 4.5", "BM Gambling", "Deposits and gaming withdrawals", "RSA-SHA256 signatures"],
+    body: [
+      "This view keeps the shared IPG settings, signature rules, HTTP POST format, and callback handling, but filters the method list to the Gambling business model.",
+      "For deposits, use redirect, embedded, modal, Google Pay redirect, Apple Pay redirect, or Apple Pay only JS SDK depending on the merchant experience.",
+      "For withdrawals, use IPGOCT. Use IPGGetTxnStatus only as a reference check for OCT timeout cases, and implement IPGReversal because it is mandatory for all merchants.",
+    ],
+    resources: [resources.gamblingApi],
+    tables: [gamblingImplementationTable, gamblingRequiredMethodsTable],
+    request: `IPGmethod=IPGPurchase
+IPGVersion=4.5
+Originator=33
+MID=000000000000123
+OrderID=<unique-deposit-order>
+URL_Notify=https://merchant.example/ipg/notify
+Signature=<base64-signature>`,
+    response: `Deposits are confirmed by signed JSON callback to URL_Notify.
+Withdrawals use IPGOCT and return a signed backend response.
+Reversal is mandatory for previously executed payments when reversal is needed.`,
+  },
+  "ipg-gambling-overview": {
+    title: "IPG 4.5 - Gambling Business Model",
+    subtitle: "Business Model",
+    description:
+      "Focused IPG 4.5 reference for Gambling merchants, including only the applicable checkout, wallet, backend, callback, and signature sections.",
+    facts: ["Protocol 4.5", "BM Gambling", "Deposits and gaming withdrawals", "RSA-SHA256 signatures"],
+    body: [
+      "This view keeps the shared IPG settings, signature rules, HTTP POST format, and callback handling, but filters the method list to the Gambling business model.",
+      "For deposits, use redirect, embedded, modal, Google Pay redirect, Apple Pay redirect, or Apple Pay only JS SDK depending on the merchant experience.",
+      "For withdrawals, use IPGOCT. Use IPGGetTxnStatus only as a reference check for OCT timeout cases, and implement IPGReversal because it is mandatory for all merchants.",
+    ],
+    resources: [resources.gamblingApi],
+    tables: [gamblingImplementationTable, gamblingRequiredMethodsTable],
+    request: `IPGmethod=IPGPurchase
+IPGVersion=4.5
+Originator=33
+MID=000000000000123
+OrderID=<unique-deposit-order>
+URL_Notify=https://merchant.example/ipg/notify
+Signature=<base64-signature>`,
+    response: `Deposits are confirmed by signed JSON callback to URL_Notify.
+Withdrawals use IPGOCT and return a signed backend response.
+Reversal is mandatory for previously executed payments when reversal is needed.`,
+  },
+  "ipg-gambling-functions": {
+    title: "Gambling Function Scope",
+    subtitle: "Business Model",
+    description:
+      "The applicable IPG 4.5 functions for Gambling merchants, separated from the Financial Institution and ECommerce methods.",
+    facts: ["No IPGRefund", "No IPGFundsDisbursement", "IPGOCT for withdrawals", "IPGReversal mandatory"],
+    body: [
+      "The Gambling business model does not use IPGRefund or IPGFundsDisbursement. Those methods remain available in the all-business-model view and their own model contexts.",
+      "Choose one checkout presentation for deposits, add wallet-specific flows when needed, then implement the backend methods that match the merchant's withdrawal and reversal requirements.",
+    ],
+    resources: [resources.gamblingApi],
+    tables: [gamblingImplementationTable, gamblingRequiredMethodsTable],
+  },
+  "ipg-wallet-overview": {
+    title: "Gambling Wallet Options",
+    subtitle: "Wallet Deposits",
+    description:
+      "Gambling merchants can use Google Pay redirect, Apple Pay redirect, or Apple Pay only JS SDK depending on the wallet journey.",
+    facts: ["Google Pay redirect", "Apple Pay redirect", "Apple Pay only SDK", "URL_Notify remains authoritative"],
+    availability: availability(true, false, false),
+    body: [
+      "Google Pay and Apple Pay redirect flows use the iCard JS SDK to check wallet availability on the merchant page, then continue through IPGPurchase with IPGPaymentContext.",
+      "Apple Pay only JS SDK uses IPGTokenProviderSession to create the Apple session and IPGTokenizedCardPurchase to complete the payment.",
+    ],
+    resources: [resources.gamblingApi],
+    tables: [gamblingWalletContextTable],
+  },
+  "ipg-google-pay": {
+    title: "Google Pay for Gambling",
+    subtitle: "Wallet Deposits",
+    description:
+      "Google Pay for BM Gambling uses the iCard JS SDK for availability checks and IPGPurchase for the redirect checkout.",
+    facts: ["BM Gambling", "IPGPaymentContext=GooglePay", "Redirect checkout", "No WebView support"],
+    availability: availability(true, false, false),
+    body: [
+      "Include the iCard Google/Apple Pay SDK on the merchant payment-method page, check whether Google Pay is available on the customer device, and show the Google Pay method only when the SDK returns ready.",
+      "When the customer continues, create the usual signed IPGPurchase request and include IPGPaymentContext=GooglePay so the iCard checkout opens the Google Pay context.",
+    ],
+    resources: [resources.gamblingApi],
+    request: `<script src="https://dev-ipg.icards.eu/sandbox/js/icard-g-a-pay.min.js"></script>
+<script>
+const googlePay = new ICardIpgGAPay({ mid: "<MID>", environment: "sandbox" });
+googlePay.isGooglePayAvailable().then((isReady) => {
+  if (isReady) showGooglePayMethod();
+});
+</script>`,
+    response: `IPGmethod=IPGPurchase
+IPGVersion=4.5
+IPGPaymentContext=GooglePay
+MID=<MID>
+OrderID=<order-id>
+URL_Notify=https://merchant.example/ipg/notify
+Signature=<base64-signature>`,
+  },
+  "ipg-apple-pay": {
+    title: "Apple Pay for Gambling",
+    subtitle: "Wallet Deposits",
+    description:
+      "BM Gambling supports Apple Pay through a redirect implementation and an Apple Pay only JS SDK implementation.",
+    facts: ["HTTPS required", "Valid SSL", "TLS 1.2", "Domain verification"],
+    availability: availability(true, false, false),
+    body: [
+      "For Apple Pay redirect, use the JS SDK to check Apple Pay availability on the merchant page, then send IPGPurchase with IPGPaymentContext=ApplePay.",
+      "For Apple Pay only JS SDK, the deposit page displays the Apple Pay button, the backend creates IPGTokenProviderSession, and the final payment is completed by IPGTokenizedCardPurchase.",
+    ],
+    resources: [resources.gamblingApi],
+    request: `Redirect:
+IPGmethod=IPGPurchase
+IPGPaymentContext=ApplePay
+IPGVersion=4.5
+Signature=<base64-signature>
+
+Apple Pay only SDK:
+IPGmethod=IPGTokenProviderSession
+...
+IPGmethod=IPGTokenizedCardPurchase`,
+  },
+  "ipg-wallet-sdk": {
+    title: "Gambling JS SDK Setup",
+    subtitle: "Wallet Deposits",
+    description:
+      "The iCard JS SDK is used on Gambling merchant pages to detect Apple Pay and Google Pay availability before the selected IPG flow starts.",
+    facts: ["Sandbox SDK", "Production SDK", "Availability checks", "Merchant page integration"],
+    resources: [resources.gamblingApi],
+    tables: [gamblingWalletContextTable],
+    request: `<!-- Sandbox -->
+<script src="https://dev-ipg.icards.eu/sandbox/js/icard-g-a-pay.min.js"></script>
+
+<!-- Production -->
+<script src="https://ipg.icard.com/js/icard-g-a-pay.min.js"></script>`,
+  },
+};
+
+const financialInstitutionMenu = [
+  modelGeneralGroup("ipg-financial-overview"),
+  callbackDocumentationGroup,
+  modelImplementationTypesGroup,
+  modelApiMethodsGroup,
+  {
+    title: "Backend Methods",
+    items: [
+      { id: "ipg-funds-disbursement", label: "IPGFundsDisbursement", type: "post" },
+      { id: "ipg-reversal", label: "IPGReversal", type: "post" },
+      { id: "ipg-get-status", label: "IPGGetTxnStatus", type: "post" },
+    ],
+  },
+  modelBusinessModelsGroup("ipg-financial-functions"),
+];
+
+const financialInstitutionContent = {
+  ...ipgContent,
+  "ipg-overview": {
+    title: "IPG 4.5 - Financial Institution Business Model",
+    subtitle: "Business Model",
+    description:
+      "Focused IPG 4.5 entry point for Financial Institution integrations.",
+    facts: ["Protocol 4.5", "BM Financial Institution", "Funds disbursement", "RSA-SHA256 signatures"],
+    body: [
+      "This view filters the navigation to the Financial Institution methods while keeping the shared IPG settings, signing, and callback sections.",
+      "Use IPGFundsDisbursement for the model-specific payout method, IPGGetTxnStatus for backend status checks, and IPGReversal where a previously executed payment must be reversed.",
+    ],
+    tables: [featureMatrixTable, backendComparisonTable],
+  },
+  "ipg-financial-overview": {
+    title: "IPG 4.5 - Financial Institution Business Model",
+    subtitle: "Business Model",
+    description:
+      "Focused IPG 4.5 entry point for Financial Institution integrations.",
+    facts: ["Protocol 4.5", "BM Financial Institution", "Funds disbursement", "RSA-SHA256 signatures"],
+    body: [
+      "This view filters the navigation to the Financial Institution methods while keeping the shared IPG settings, signing, and callback sections.",
+      "Use IPGFundsDisbursement for the model-specific payout method, IPGGetTxnStatus for backend status checks, and IPGReversal where a previously executed payment must be reversed.",
+    ],
+    tables: [featureMatrixTable, backendComparisonTable],
+  },
+  "ipg-financial-functions": {
+    title: "Financial Institution Function Scope",
+    subtitle: "Business Model",
+    description:
+      "The applicable IPG 4.5 functions for Financial Institution integrations, separated from Gambling and ECommerce backend methods.",
+    facts: ["No IPGOCT", "No IPGRefund", "IPGFundsDisbursement for disbursement", "IPGReversal when needed"],
+    body: [
+      "The Financial Institution view keeps the shared checkout, wallet, callback, and signature sections, then narrows the backend section to the disbursement/status/reversal methods.",
+      "Use IPGFundsDisbursement for the model-specific backend operation. IPGOCT remains Gambling-specific and IPGRefund remains ECommerce-specific.",
+    ],
+    tables: [financialInstitutionRequiredMethodsTable, backendComparisonTable],
+  },
+};
+
+const ecommerceMenu = [
+  modelGeneralGroup("ipg-ecommerce-overview"),
+  callbackDocumentationGroup,
+  modelImplementationTypesGroup,
+  modelApiMethodsGroup,
+  {
+    title: "Backend Methods",
+    items: [
+      { id: "ipg-refund", label: "IPGRefund", type: "post" },
+      { id: "ipg-reversal", label: "IPGReversal", type: "post" },
+    ],
+  },
+  modelBusinessModelsGroup("ipg-ecommerce-functions"),
+];
+
+const ecommerceContent = {
+  ...ipgContent,
+  "ipg-overview": {
+    title: "IPG 4.5 - ECommerce Business Model",
+    subtitle: "Business Model",
+    description:
+      "Focused IPG 4.5 entry point for ECommerce integrations.",
+    facts: ["Protocol 4.5", "BM ECommerce", "Refunds", "RSA-SHA256 signatures"],
+    body: [
+      "This view filters the navigation to the ECommerce methods while keeping the shared IPG settings, signing, and callback sections.",
+      "Use IPGRefund for post-payment refunds and IPGReversal for payments that must be reversed before settlement.",
+    ],
+    tables: [featureMatrixTable, backendComparisonTable],
+  },
+  "ipg-ecommerce-overview": {
+    title: "IPG 4.5 - ECommerce Business Model",
+    subtitle: "Business Model",
+    description:
+      "Focused IPG 4.5 entry point for ECommerce integrations.",
+    facts: ["Protocol 4.5", "BM ECommerce", "Refunds", "RSA-SHA256 signatures"],
+    body: [
+      "This view filters the navigation to the ECommerce methods while keeping the shared IPG settings, signing, and callback sections.",
+      "Use IPGRefund for post-payment refunds and IPGReversal for payments that must be reversed before settlement.",
+    ],
+    tables: [featureMatrixTable, backendComparisonTable],
+  },
+  "ipg-ecommerce-functions": {
+    title: "ECommerce Function Scope",
+    subtitle: "Business Model",
+    description:
+      "The applicable IPG 4.5 functions for ECommerce integrations, separated from Gambling and Financial Institution backend methods.",
+    facts: ["No IPGOCT", "No IPGFundsDisbursement", "IPGRefund for refunds", "IPGReversal when needed"],
+    body: [
+      "The ECommerce view keeps the shared checkout, wallet, callback, and signature sections, then narrows the backend section to refund and reversal methods.",
+      "Use IPGRefund for post-payment refunds. IPGOCT remains Gambling-specific and IPGFundsDisbursement remains Financial Institution-specific.",
+    ],
+    tables: [ecommerceRequiredMethodsTable, backendComparisonTable],
+  },
+};
+
+const versionedReference = (menu, content, summary) => ({
+  menu,
+  content,
+  summary,
+});
+
+export const ipgBusinessModels = [
+  {
+    id: "all",
+    label: "All business models",
+    status: "Default",
+    description: "Full IPG reference with all model differences visible.",
+  },
+  {
+    id: "gambling",
+    label: "Gambling",
+    status: "Focused",
+    description: "Focused Gambling reference with only applicable IPG functions.",
+  },
+  {
+    id: "financial-institution",
+    label: "Financial institution",
+    status: "Focused",
+    description: "Focused Financial Institution reference and payout methods.",
+  },
+  {
+    id: "e-commerce",
+    label: "E-commerce",
+    status: "Focused",
+    description: "Focused ECommerce reference and refund methods.",
+  },
+];
+
+export const ipgBusinessModelDocuments = {
+  all: {
+    id: "all",
+    label: "All business models",
+    defaultVersion: "4.5",
+    defaultSection: "ipg-overview",
+    versions: {
+      "4.2": versionedReference(ipgMenu, ipgContent, ipgVersionDocuments["4.2"].summary),
+      "4.3": versionedReference(ipgMenu, ipgContent, ipgVersionDocuments["4.3"].summary),
+      "4.5": versionedReference(ipgMenu, ipgContent, ipgVersionDocuments["4.5"].summary),
+    },
+  },
+  gambling: {
+    id: "gambling",
+    label: "Gambling",
+    defaultVersion: "4.5",
+    defaultSection: "ipg-gambling-overview",
+    summaries: {
+      "4.2": scopedVersionSummary("Gambling", "4.2", ["BM Gambling"]),
+      "4.3": scopedVersionSummary("Gambling", "4.3", ["BM Gambling"]),
+      "4.5": gamblingVersion45Summary,
+    },
+    versions: {
+      "4.5": versionedReference(gamblingMenu, gamblingContent, gamblingVersion45Summary),
+    },
+  },
+  "financial-institution": {
+    id: "financial-institution",
+    label: "Financial institution",
+    defaultVersion: "4.5",
+    defaultSection: "ipg-financial-overview",
+    summaries: {
+      "4.2": scopedVersionSummary("Financial Institution", "4.2", ["BM Financial Institution"]),
+      "4.3": scopedVersionSummary("Financial Institution", "4.3", ["BM Financial Institution"]),
+      "4.5": scopedVersionSummary("Financial Institution", "4.5", ["BM Financial Institution"]),
+    },
+    versions: {
+      "4.5": versionedReference(
+        financialInstitutionMenu,
+        financialInstitutionContent,
+        scopedVersionSummary("Financial Institution", "4.5", ["BM Financial Institution"])
+      ),
+    },
+  },
+  "e-commerce": {
+    id: "e-commerce",
+    label: "E-commerce",
+    defaultVersion: "4.5",
+    defaultSection: "ipg-ecommerce-overview",
+    summaries: {
+      "4.2": scopedVersionSummary("ECommerce", "4.2", ["BM ECommerce"]),
+      "4.3": scopedVersionSummary("ECommerce", "4.3", ["BM ECommerce"]),
+      "4.5": scopedVersionSummary("ECommerce", "4.5", ["BM ECommerce"]),
+    },
+    versions: {
+      "4.5": versionedReference(
+        ecommerceMenu,
+        ecommerceContent,
+        scopedVersionSummary("ECommerce", "4.5", ["BM ECommerce"])
+      ),
+    },
   },
 };

@@ -6,6 +6,39 @@
   font-family: "Manrope", "Inter", system-ui, sans-serif;
 }
 
+.ipg-page-legacy {
+  background: linear-gradient(180deg, #f7f8fb 0%, #eef2f7 100%);
+}
+
+.ipg-page-legacy .small-topline,
+.ipg-page-legacy .sidebar-group-title {
+  color: #4e74b8;
+}
+
+.ipg-page-legacy .version-button:hover,
+.ipg-page-legacy .version-button[aria-expanded="true"],
+.ipg-page-legacy .sidebar-search:focus {
+  border-color: rgba(78, 116, 184, 0.5);
+  box-shadow: 0 0 0 3px rgba(78, 116, 184, 0.12);
+}
+
+.ipg-page-legacy .version-option:hover,
+.ipg-page-legacy .version-option-active {
+  border-color: rgba(78, 116, 184, 0.4);
+  background: #edf3ff;
+}
+
+.ipg-page-legacy .version-button strong,
+.ipg-page-legacy .hero-chip {
+  background: #edf3ff;
+  color: #3f63a8;
+}
+
+.ipg-page-focused-model .hero-chip {
+  background: #ecfff6;
+  color: #13995f;
+}
+
 .ipg-topbar {
   display: flex;
   justify-content: space-between;
@@ -60,6 +93,7 @@
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .top-tag {
@@ -72,11 +106,128 @@
   font-weight: 600;
 }
 
+.version-select {
+  position: relative;
+}
+
+.model-select {
+  z-index: 9;
+}
+
+.version-button {
+  min-height: 38px;
+  padding: 6px 10px 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #e4e4e8;
+  background: #ffffff;
+  color: #20cf84;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  transition: 0.2s ease;
+}
+
+.version-button:hover,
+.version-button[aria-expanded="true"] {
+  border-color: rgba(32, 207, 132, 0.5);
+  box-shadow: 0 0 0 3px rgba(32, 207, 132, 0.12);
+}
+
+.version-button strong {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #ecfff6;
+  color: #13995f;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.version-caret {
+  color: #76798b;
+  font-size: 12px;
+}
+
+.version-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10;
+  width: min(360px, calc(100vw - 36px));
+  padding: 8px;
+  border-radius: 18px;
+  border: 1px solid #e4e4e8;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(77, 76, 125, 0.14);
+  display: grid;
+  gap: 6px;
+}
+
+.model-menu {
+  width: min(420px, calc(100vw - 36px));
+}
+
+.version-option {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: #4d4c7d;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: start;
+  text-align: left;
+  cursor: pointer;
+}
+
+.version-option:hover,
+.version-option-active {
+  border-color: rgba(32, 207, 132, 0.42);
+  background: #ecfff6;
+}
+
+.version-option span {
+  display: grid;
+  gap: 4px;
+}
+
+.version-option strong {
+  font-size: 14px;
+}
+
+.version-option small {
+  color: #76798b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.version-option em {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #f5f5f8;
+  color: #6e7485;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .ipg-layout {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr) 420px;
   gap: 16px;
   align-items: start;
+}
+
+.ipg-layout-no-code {
+  grid-template-columns: 320px minmax(0, 1fr);
 }
 
 .ipg-sidebar,
@@ -228,11 +379,11 @@
   border: 1px solid #e4e4e8;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 12px 28px rgba(77, 76, 125, 0.06);
-  padding: 32px;
+  padding: 36px;
 }
 
 .content-hero {
-  padding-bottom: 24px;
+  padding-bottom: 28px;
   border-bottom: 1px solid #e4e4e8;
 }
 
@@ -269,8 +420,8 @@
 
 .content-hero h1 {
   margin: 0;
-  font-size: 42px;
-  line-height: 1.05;
+  font-size: 40px;
+  line-height: 1.12;
   font-weight: 300;
   color: #4d4c7d;
 }
@@ -280,6 +431,7 @@
   line-height: 1.8;
   color: #76798b;
   font-size: 16px;
+  max-width: 900px;
 }
 
 .facts-row {
@@ -341,26 +493,35 @@
 }
 
 .doc-section {
-  margin-top: 28px;
+  margin-top: 34px;
+  padding-top: 4px;
 }
 
 .doc-section h2 {
-  margin: 0 0 14px;
-  font-size: 28px;
+  margin: 0 0 16px;
+  font-size: 26px;
+  line-height: 1.2;
   font-weight: 300;
   color: #4d4c7d;
 }
 
+.paragraphs {
+  max-width: 920px;
+}
+
 .paragraphs p {
-  margin: 0 0 16px;
-  line-height: 1.85;
-  color: #76798b;
+  margin: 0 0 18px;
+  color: #5f6578;
+  font-size: 15px;
+  line-height: 1.9;
 }
 
 .section-copy {
-  margin: 0 0 14px;
-  line-height: 1.8;
-  color: #76798b;
+  max-width: 920px;
+  margin: 0 0 16px;
+  color: #5f6578;
+  font-size: 15px;
+  line-height: 1.85;
 }
 
 .resource-grid {
