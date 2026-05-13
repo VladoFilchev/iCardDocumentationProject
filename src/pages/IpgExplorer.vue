@@ -278,6 +278,23 @@
             </p>
           </div>
         </section>
+
+        <section v-if="activeExamples.length" class="doc-section">
+          <h2>Examples</h2>
+          <div class="callback-example-grid">
+            <article
+              v-for="example in activeExamples"
+              :key="example.title"
+              class="callback-example-card"
+            >
+              <div class="callback-example-header">
+                <strong>{{ example.title }}</strong>
+                <span v-if="example.description">{{ example.description }}</span>
+              </div>
+              <pre><code>{{ example.code }}</code></pre>
+            </article>
+          </div>
+        </section>
       </main>
 
       <aside v-if="hasCodeContent" class="ipg-codebar">
@@ -517,9 +534,58 @@ function hasSnippet(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+const callbackExampleTitles = [
+  "Declined 3DS - frictionless flow",
+  "Failed merchant validation",
+  "Declined 3DS - challenge flow",
+  "Declined payment",
+  "Success payment",
+];
+
+function getCallbackExampleDescription(title) {
+  if (title === "Success payment") return "Successful authorization callback.";
+  if (title === "Declined payment") return "Authorization declined by the provider or issuer.";
+  if (title === "Failed merchant validation") return "Merchant validation failure callback with an Errors array.";
+  if (title.includes("challenge")) return "3DS challenge decline callback.";
+  return "3DS frictionless decline callback.";
+}
+
+function splitCallbackExamples(value) {
+  if (!hasSnippet(value)) return [];
+
+  return callbackExampleTitles
+    .map((title, index) => {
+      const start = value.indexOf(title);
+      if (start === -1) return null;
+
+      const nextTitlePosition = callbackExampleTitles
+        .slice(index + 1)
+        .map((nextTitle) => value.indexOf(nextTitle, start + title.length))
+        .find((position) => position !== -1);
+      const end = nextTitlePosition ?? value.length;
+
+      return {
+        title,
+        description: getCallbackExampleDescription(title),
+        code: value.slice(start + title.length, end).trim(),
+      };
+    })
+    .filter(Boolean);
+}
+
+const activeExamples = computed(() => {
+  if (Array.isArray(active.value?.examples)) return active.value.examples;
+  if (activeId.value === "ipg-callback-examples") {
+    return splitCallbackExamples(active.value?.example);
+  }
+  return [];
+});
+
 const hasRequestSnippet = computed(() => hasSnippet(active.value?.request));
 const hasResponseSnippet = computed(() => hasSnippet(active.value?.response));
-const hasExampleSnippet = computed(() => hasSnippet(active.value?.example));
+const hasExampleSnippet = computed(
+  () => activeId.value !== "ipg-callback-examples" && hasSnippet(active.value?.example)
+);
 const hasCodeContent = computed(
   () => hasRequestSnippet.value || hasResponseSnippet.value || hasExampleSnippet.value
 );

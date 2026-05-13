@@ -66,6 +66,30 @@ const resources = {
     href: "https://ipg.icard.com/asym_keys/generate",
     type: "Tool",
   },
+  sandboxEndpoint: {
+    title: "Sandbox endpoint",
+    description: "Sandbox IPG endpoint used during merchant integration and testing.",
+    href: "https://dev-ipg.icards.eu/sandbox/",
+    type: "Sandbox",
+  },
+  productionEndpoint: {
+    title: "Production endpoint",
+    description: "Production IPG endpoint used after certification and go-live approval.",
+    href: "https://ipg.icard.com/",
+    type: "Production",
+  },
+  integrationSupport: {
+    title: "Technical integration support",
+    description: "Contact iCard technical integration support if callback delivery cannot be restored.",
+    href: "mailto:cs.integration@icard.com",
+    type: "Email",
+  },
+  customerSupport: {
+    title: "Customer support",
+    description: "Contact iCard customer support for callback delivery and operational support cases.",
+    href: "mailto:cs.support@icard.com",
+    type: "Email",
+  },
 };
 const media = {
   appleMobileButtons: {
@@ -482,6 +506,70 @@ const txnStatusResponseFields = [
   r("IPGTrnStatusMsg", "Success", "String", "Transaction status message."),
   r("Signature", "uIkMPI...KakY=", "BASE64", "Response signature."),
 ];
+const ipgIntroductionBody = [
+  "This document describes the interface for e-commerce payments via payment gateway.",
+  "The Merchant should integrate the iPayment Gateway API (IPG API) at the site accepting card payments. IPG API will gain access to the entry point of iPayment Gateway (IPG) managed by iCard AD (iCARD).",
+  "IPG handles and guides the cardholder during the payment process, checks card sensitive data, and processes payment transactions through the VISA and MasterCard schemes.",
+  "The purpose of this document is to specify the IPG API interface and demonstrate how it is used in the most common way. All techniques used within the interface are standard throughout the industry and should be very easy to implement on any platform.",
+];
+const ipgProvidesTable = table(
+  "IPG API Provides",
+  ["Capability"],
+  [
+    ["Secured page and secured communication channel with the Merchant"],
+    ["Storing of merchant private data such as amount, payment methods, and transaction details"],
+    ["Financial transactions to VISA and MasterCard transparent for the Merchant"],
+    ["Operations for the front-end: purchase transaction"],
+    ["Operations for the back-end: refund and reversal"],
+    ["3D processing"],
+  ]
+);
+const ipgOutOfScopeTable = table(
+  "Out of Scope",
+  ["Area"],
+  [
+    ["Merchant statements and payouts"],
+    ["Merchant back-end (iMerchant)"],
+    ["Merchant support system (IPGPlatform)"],
+  ]
+);
+const signatureGenerationInputsTable = table(
+  "Signature Generation Inputs",
+  ["Input", "Description"],
+  [
+    ["Data to sign", "Generally the request body: all request parameters without the Signature parameter."],
+    ["Private key", "The merchant private key used for generating the digital signature."],
+  ]
+);
+const signatureGenerationStepsTable = table(
+  "Signature Generation Steps for IPG Version >= 4.5",
+  ["Step", "Action"],
+  [
+    ["1", "Validate input: data must not contain any Signature parameter, even empty, and the private key must be available."],
+    ["2", "Lowercase all keys, encode booleans as 1 or 0, flatten nested objects and arrays into colon-delimited paths, preserve empty values, ignore empty arrays, convert strings to UTF-8, sort in natural order, and join with semicolons."],
+    ["3", "Calculate the digital signature with SHA-256 using the private key."],
+    ["4", "Encode the binary signature using Base64."],
+    ["5", "Add the Signature parameter to the request body using the generated Base64 value."],
+  ]
+);
+const signatureVerificationInputsTable = table(
+  "Signature Verification Inputs",
+  ["Input", "Description"],
+  [
+    ["Signed data to verify", "Usually a callback or response body in JSON format with a Signature parameter."],
+    ["Public key", "The iCard public key used to validate the received Signature."],
+  ]
+);
+const signatureVerificationStepsTable = table(
+  "Signature Verification Steps for IPG Version >= 4.5",
+  ["Step", "Action"],
+  [
+    ["1", "Validate that the data conforms to JSON, contains a Signature parameter with a value, and the public key is available."],
+    ["2", "Extract the Signature value, remove Signature from the data, and decode the signature from Base64."],
+    ["3", "Generate the canonical string from the remaining data using the same normalization, flattening, UTF-8 conversion, natural sorting, and semicolon joining used for request signing."],
+    ["4", "Verify the decoded signature with SHA-256 and the iCard public key."],
+  ]
+);
 const implementationTypesTable = table(
   "Implementation Types Summary",
   ["Type", "API Methods Used", "Description"],
@@ -494,19 +582,76 @@ const implementationTypesTable = table(
     ["Backend", "IPGOCT / IPGFundsDisbursement / IPGRefund / IPGReversal", "Server-to-server methods for payouts, refunds, and reversals."],
   ]
 );
+const merchantIntegrationJourneyTable = table(
+  "Merchant Integration Journey",
+  ["Phase", "Objective", "Key actions"],
+  [
+    [
+      "Phase 1: Technical Discovery Meeting",
+      "Align on the scope and technical requirements of the integration.",
+      "Schedule a technical consultation before code is written.\nReview the business use case and transaction flow.\nIdentify the API methods and integration types to implement, such as Redirect, Server-to-Server, or SDK.\nAddress technical constraints and security requirements.",
+    ],
+    [
+      "Phase 2: Sandbox Integration & Testing",
+      "Validate the implementation in a non-production environment.",
+      "Receive Sandbox Credentials and the Test Case Document.\nConfigure the system using the provided Sandbox settings.\nPerform all scenarios from the Test Case file.\nFill in transaction IDs and responses, then return the file to the technical team.\nThe iCard team reviews logs for data integrity and protocol compliance.",
+    ],
+    [
+      "Phase 3: Production Migration & Validation",
+      "Verify system performance and security in the live environment.",
+      "After Sandbox approval, iCard issues the Production Settings.\nPerform a limited set of live test transactions while support monitors them in real time.\nGenerate production signature keys and provide the public key so the production MID/CID can be configured.\nRecord live transactions in the Production Test Case file and submit it for final audit.",
+    ],
+    [
+      "Phase 4: Go-Live & Launch Support",
+      "Move to real customer traffic through a controlled launch.",
+      "After production requests are double-checked, provide the intended Go-Live Date.\nOn the launch date, iCard provides enhanced monitoring for the initial customer traffic.\nAfter a successful monitoring period, the integration is considered fully live.",
+    ],
+  ]
+);
+const sandboxIntegrationChecklistTable = table(
+  "Sandbox Testing Checklist",
+  ["Step", "Merchant action", "Review outcome"],
+  [
+    ["1. Integration", "Configure the merchant system with the provided Sandbox settings.", "Requests can be created and signed against the sandbox environment."],
+    ["2. Execution", "Run every scenario from the provided Test Case file.", "All required customer and backend flows are exercised."],
+    ["3. Reporting", "Fill in the Test Case file with transaction IDs and responses, then return it to the technical team.", "iCard receives the data needed to match merchant records to platform logs."],
+    ["4. Review", "Wait for iCard review of the transactions in platform logs.", "Data integrity and protocol compliance are confirmed before production migration."],
+  ]
+);
+const productionValidationChecklistTable = table(
+  "Production Validation Checklist",
+  ["Item", "Action"],
+  [
+    ["Production Settings", "Use the production configuration issued after Sandbox testing is approved."],
+    ["Production signature keys", "Generate the production key pair with the production signature generation tool and provide the public key to iCard for production MID/CID setup."],
+    ["Limited live tests", "Perform a small set of monitored live transactions before opening full traffic."],
+    ["Production Test Case file", "Record the live test transactions and submit the file for final audit."],
+    ["Go-Live Date", "Share the intended Go-Live Date after production requests are double-checked."],
+  ]
+);
 const dataTypesTable = table(
   "Data Type Formats",
-  ["Type", "Description", "Example"],
+  ["Data Type in document", "Description", "Example"],
   [
-    ["int", "Integer number", "1"],
-    ["String", "Text string", "This is a string"],
-    ["Date", "ISO 8601 date: YYYY-MM-DD", "2021-09-14"],
-    ["DateTime", "ISO 8601 datetime: YYYY-MM-DD HH:mm:SS", "2021-09-14 23:59:59"],
-    ["A(n)", "Alpha string, n characters required", "Alpha string"],
-    ["AN(n)", "Alphanumeric string, n characters required", "Alphanumeric123"],
-    ["N(n)", "Numeric string, left-padded with zeroes", "000123"],
-    ["Double(M,D)", "Decimal number, M total digits, D after decimal. Dot separator only.", "34.56"],
-    ["BASE64", "Binary data encoded in Base64", "YW55IGNhcm5hbA=="],
+    ["int", "Integer", "1"],
+    ["String", "String", "This is a string"],
+    ["Date", "ISO 8601 date string YYYY-MM-DD", "2021-09-14"],
+    ["DateTime", "ISO 8601 datetime string YYYY-MM-DD HH:mm:SS", "2021-09-14 23:59:59"],
+    ["A(n)", "Alpha string. n characters required.", "Alpha string"],
+    ["AN(n)", "Alphanumeric string. n characters required.", "Alphanumeric string"],
+    ["N(n)", "Numeric string. n characters required. Number is left-padded with zeroes.", "000123"],
+    ["Double(M,D)", "Numeric string with decimal point. Only point is used, with up to M total digits and D digits after the decimal point.", "34.56"],
+    ["BASE64", "String used to pass binary data. The binary data should be converted to Base64 standard.", "YW55IGNhcm5hbCBwbGVhc3VyZQ=="],
+    ["XML", "Simple in-place XML array.", `<?xml version="1.0"?>
+<ipg_response>
+  <status>0</status>
+  <status_msg>Success</status_msg>
+  ...
+</ipg_response>`],
+    ["JSON", "JSON string.", `{
+  "Field1": "value",
+  "Field2": "value"
+}`],
   ]
 );
 const retryScheduleTable = table(
@@ -521,6 +666,34 @@ const retryScheduleTable = table(
     ["7", "7200 seconds (2 hours)", "About 24 hours max"],
   ],
   "If the merchant does not return HTTP 200 OK, IPG retries the callback up to 53 times within one day. After 24 hours, if we haven't received 200 OK, we will reach you to request further information regarding the transaction."
+);
+const callbackHandlingStepsTable = table(
+  "Callback Handling Procedure",
+  ["Step", "Merchant action", "Details"],
+  [
+    ["1", "Accept and verify the callback", "Accept callbacks only from payment platform IP addresses provided by iCard technical support. Validate the callback sender and data integrity by verifying the Signature included in every callback."],
+    ["2", "Confirm callback receipt", "Return a synchronous HTTP response. Use 200 OK when the callback is valid and accepted. Use an error status that matches the error type when processing fails."],
+    ["3", "Perform the required actions", "For prescriptive callbacks, perform the actions stated as required. For informational callbacks, perform the actions that match the web service operation, such as customer notification."],
+  ]
+);
+const callbackResponseCodesTable = table(
+  "Callback Response Codes",
+  ["HTTP response", "When to use it", "IPG behavior"],
+  [
+    ["200 OK", "The callback has been received, verified, and accepted.", "Callback delivery is confirmed."],
+    ["400 Bad Request", "A parameter string could not be converted into an array or the callback payload cannot be parsed.", "The callback will be sent again."],
+    ["500 Internal Server Error", "The callback was received at an incorrect URL or the merchant service has a server-side issue.", "The callback will be sent again."],
+    ["Any non-200 response or no response", "Callback receipt is not confirmed.", "The callback will be resent regardless of error type."],
+  ]
+);
+const callbackTroubleshootingTable = table(
+  "Troubleshooting Callback Delivery",
+  ["Case", "Possible cause", "Recommended action"],
+  [
+    ["No callbacks are triggered by any events", "The relevant requests or events may not have been initiated in the platform.", "Ensure the correct requests were sent from the web service and accepted by the platform. Send a test request if needed, for example one that generates a payment card token."],
+    ["Requests are accepted but callbacks are still missing", "Callback URLs may be incorrect or unreachable.", "Check that the callback delivery URLs are correct, publicly reachable, and match the URL_Notify values sent in requests."],
+    ["Previous checks do not resolve delivery", "There may be a communication-channel or platform-side delivery issue.", "Contact iCard technical integration support at cs.integration@icard.com or customer support at cs.support@icard.com."],
+  ]
 );
 const featureMatrixTable = table(
   "Feature Matrix",
@@ -709,6 +882,7 @@ export const ipgMenu = [
     title: "General",
     items: [
       { id: "ipg-overview", label: "Overview & Architecture", type: "overview" },
+      { id: "ipg-integration-steps", label: "Integration steps", type: "guide" },
       { id: "ipg-http-post", label: "HTTP POST", type: "guide" },
       { id: "ipg-data-types", label: "Data type formats", type: "schema" },
       { id: "ipg-security", label: "Security & signatures", type: "guide" },
@@ -722,6 +896,7 @@ export const ipgMenu = [
     items: [
       { id: "ipg-callbacks", label: "Callbacks overview", type: "guide" },
       { id: "ipg-callback-retries", label: "Handling & retries", type: "guide" },
+      { id: "ipg-callback-troubleshooting", label: "Troubleshooting", type: "guide" },
       { id: "ipg-callback-payment", label: "Object Payment", type: "schema" },
       { id: "ipg-callback-carddata", label: "Object CardData", type: "schema" },
       { id: "ipg-callback-customer", label: "Object Customer", type: "schema" },
@@ -783,78 +958,131 @@ export const ipgContent = {
     description:
       "Complete integration reference for IPG protocol 4.5 across BM Gambling, BM Credit Institution, and BM ECommerce.",
     facts: ["Protocol 4.5", "HTTPS", "RSA-SHA256 signatures", "JSON callbacks"],
+    body: ipgIntroductionBody,
+    tables: [ipgProvidesTable, ipgOutOfScopeTable, implementationTypesTable],
+  },
+  "ipg-integration-steps": {
+    title: "Merchant Integration Steps",
+    subtitle: "General",
+    description:
+      "Step-by-step operational journey from initial technical discovery to full production launch.",
+    facts: ["Technical discovery", "Sandbox testing", "Production validation", "Go-live monitoring"],
     body: [
-      "The iCard iPayment Gateway API enables merchants to accept Visa and Mastercard payments through their websites.",
-      "A typical payment starts on the merchant checkout page, continues through a merchant backend POST to IPG, then shows the iCard payment page by redirect, iframe, modal, or wallet SDK.",
-      "After authorization, IPG sends a JSON POST callback to URL_Notify. The browser redirect back to URL_OK or URL_Cancel is not the source of truth.",
+      "These integration steps apply to every IPG business model and protocol version shown in the explorer. Use the method-specific pages for request details, then use this page as the launch process checklist.",
+      "The process is designed to keep implementation secure, auditable, and predictable: first agree the integration scope, then prove the implementation in Sandbox, validate a limited production flow, and only then move to full live traffic.",
+      "If questions appear during the process, contact the assigned Integration Manager or the iCard technical integration support team.",
     ],
-    tables: [implementationTypesTable],
-    request: `POST https://dev-ipg.icards.eu/sandbox/
-Content-Type: application/x-www-form-urlencoded; charset=UTF-8
-IPGmethod=IPGPurchase&KeyIndex=1&KeyIndexResp=1&IPGVersion=4.5&...&Signature=<base64>`,
-    response: `The authoritative payment result is delivered as a signed JSON callback to URL_Notify.`,
+    resources: [resources.productionSignatureGenerator, resources.integrationSupport],
+    tables: [
+      merchantIntegrationJourneyTable,
+      sandboxIntegrationChecklistTable,
+      productionValidationChecklistTable,
+    ],
   },
   "ipg-http-post": {
     title: "HTTP POST",
     subtitle: "General",
     description:
-      "All merchant-to-IPG data transfer uses HTTP POST with URL-encoded key=value pairs in UTF-8.",
-    facts: ["Sandbox: https://dev-ipg.icards.eu/sandbox/", "Production: https://ipg.icard.com/", "UTF-8", "application/x-www-form-urlencoded"],
+      "Data transfer between Merchant and IPG is made by HTTP POST.",
+    facts: ["Sandbox endpoint", "Production endpoint", "UTF-8", "application/x-www-form-urlencoded"],
     body: [
-      "Parameters are sent in the request body as URL-encoded key=value pairs separated by ampersands.",
-      "The Signature parameter must be appended as the last parameter in the POST body.",
+      "All parameters for requests are placed in the body in [parameter=value] form.",
+      "The separator between tokens is [&]. The body is URL encoded and the character encoding is UTF-8.",
+      "The Signature parameter must be appended as the last parameter in the POST body for signed requests.",
     ],
-    request: `IPGmethod=IPGPurchase&KeyIndex=1&KeyIndexResp=1&IPGVersion=4.5&Language=EN&Originator=33&...&Signature=<base64>`,
+    resources: [resources.sandboxEndpoint, resources.productionEndpoint],
+    request: `POST /sandbox/ HTTP/2
+Host: dev-ipg.icards.eu
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0
+Content-Length: 793
+Content-Type: application/x-www-form-urlencoded
+
+IPGmethod=IPGPurchase&KeyIndex=1&KeyIndexResp=1&IPGVersion=4.2&Language=en&Originator=33...`,
   },
   "ipg-data-types": {
     title: "Data Type Formats",
     subtitle: "General",
-    description: "Protocol 4.5 uses fixed data type notation for request, response, and callback properties.",
+    description: "IPG uses fixed data type notation for request, response, and callback properties.",
     tables: [dataTypesTable],
   },
   "ipg-security": {
-    title: "Security & Signatures",
-    subtitle: "General",
+    title: "Signatures Overview",
+    subtitle: "Security & Signatures",
     description:
-      "All communication is protected by TLS 1.2+, and every request, response, and callback must be digitally signed.",
+      "The data communication between the merchant web service and the iCard payment platform is protected by TLS 1.2 or later and by digital signatures.",
     facts: ["TLS 1.2+", "RSA-SHA256", "Public key exchange", "Verify before trust"],
     body: [
-      "Both iCard and the merchant generate RSA key pairs and exchange public keys.",
-      "Merchant requests are signed with the merchant private key. IPG responses and callbacks are verified with iCard's public key.",
-      "Never trust a synchronous response or callback until its Signature has been verified successfully.",
+      "TLS ensures the confidentiality of transmitted data, but it does not guarantee message integrity or prove that the sender possesses the private key. Therefore, every message must be digitally signed with the private key.",
+      "For the signing process, both iCARD and the Merchant generate RSA public/private key pairs and exchange public keys. Each party signs messages with its private key, and the opposite side authenticates the sender with the corresponding public key.",
+      "Regardless of the interface used for the payment platform, digital signatures must be included in all requests, callbacks, and responses.",
+      "Before sending a request to the platform, generate a Signature and include it in the request. When receiving responses and callbacks, verify the received data before trusting or processing it.",
+      "This section separates signature generation, verification, and examples for testing workflows that use signatures.",
     ],
     resources: [resources.productionSignatureGenerator],
   },
   "ipg-signature-generation": {
-    title: "Signature Generation Algorithm",
+    title: "Signature Generation",
     subtitle: "Security & Signatures",
     description:
-      "Signature generation uses canonicalization plus RSA-SHA256 plus Base64 encoding.",
-    facts: ["Exclude Signature", "Lowercase keys", "Natural sort", "Signature last"],
+      "Signature generation for IPG version greater than or equal to 4.5 uses canonicalization, SHA-256 signing, and Base64 encoding.",
+    facts: ["IPG >= 4.5", "Exclude Signature", "Natural sort", "Signature last"],
     body: [
-      "Start with request parameters and the merchant private key. The Signature parameter must not be present in the data to sign.",
-      "Lowercase all parameter keys, convert boolean values true/false to 1/0, flatten values into colon-delimited path strings, preserve empty values, index array elements from zero, ignore empty arrays, UTF-8 encode all strings, sort in natural order, and join with semicolons.",
-      "Sign the canonical string with SHA-256 using the merchant private key, Base64 encode the binary signature, then append Signature as the last POST parameter.",
+      "Data to sign generally means the request body with all request parameters except Signature. The Signature parameter must not be present in the data to sign, even as an empty value.",
+      "Change all keys to lowercase, encode Boolean false as 0 and true as 1, and convert each parameter into a colon-delimited path string in the form parent_1:...:parent_n:parameter_name:parameter_value.",
+      "Preserve empty values, add array indexes starting from zero, ignore empty arrays, convert all strings to UTF-8, sort the resulting strings in natural order, and join them with semicolons.",
+      "Sign the canonical string with SHA-256 using the merchant private key, encode the binary signature with Base64, then add Signature to the request body.",
     ],
+    tables: [signatureGenerationInputsTable, signatureGenerationStepsTable],
     resources: [resources.productionSignatureGenerator],
-    request: `openssl_sign($dataToSign, $signature, $privateKey, OPENSSL_ALGO_SHA256);
-$base64Signature = base64_encode($signature);`,
-    response: `Signature=<base64-signature>`,
+    request: `PHP
+$privateKey = openssl_get_privatekey($privateKeyString);
+openssl_sign($dataToSign, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+$base64Signature = base64_encode($signature);
+
+C#
+var privateCert = File.ReadAllText(privateKeyString);
+var key = RSA.Create();
+key.ImportFromPem(privateCert.ToCharArray());
+var sha = SHA256.Create();
+var signature = key.SignHash(
+  sha.ComputeHash(Encoding.UTF8.GetBytes(dataToSign)),
+  HashAlgorithmName.SHA256,
+  RSASignaturePadding.Pkcs1
+);
+var base64Signature = Convert.ToBase64String(signature);`,
+    response: `Signature=<base64-signature>
+Signature must be added to the request body after the canonical string is signed and Base64 encoded.`,
   },
   "ipg-signature-verification": {
-    title: "Signature Verification Algorithm",
+    title: "Signature Verification",
     subtitle: "Security & Signatures",
     description:
       "Every response and callback must be verified with the same canonicalization algorithm used for signing.",
     facts: ["Extract Signature", "Remove it from data", "Normalize remaining fields", "Verify with iCard public key"],
     body: [
-      "Base64-decode the Signature field value and remove Signature from the response or callback data.",
-      "Apply the same normalization, flattening, natural sorting, and semicolon joining used for signature generation.",
-      "Verify the decoded signature against the canonical string using SHA-256 and iCard's public key. If verification fails, reject the message.",
+      "The usual input is a signed callback or response body in JSON format with a Signature parameter, plus the iCard public key.",
+      "Validate that the data conforms to JSON, contains a Signature value, and that the public key is available.",
+      "Store the Signature value, remove Signature from the data, decode the Signature from Base64, and generate the canonical string from the remaining data using the same rules as signature generation.",
+      "Verify the decoded signature against the canonical string with SHA-256 and the public key. If verification fails, reject the message.",
     ],
-    request: `$result = openssl_verify($dataToVerify, base64_decode($signature), $publicKey);`,
-    response: `Valid signature: continue processing
-Invalid signature: reject the response or callback`,
+    tables: [signatureVerificationInputsTable, signatureVerificationStepsTable],
+    request: `PHP
+$publicKey = openssl_get_publickey($publicKeyString);
+$result = openssl_verify($dataToVerify, base64_decode($signature), $publicKey);
+
+C#
+var publicCert = File.ReadAllText(publicKeyString);
+var verifyKey = RSA.Create();
+verifyKey.ImportFromPem(publicCert.ToCharArray());
+var sha = SHA256.Create();
+var result = verifyKey.VerifyHash(
+  sha.ComputeHash(Encoding.UTF8.GetBytes(dataToVerify)),
+  Convert.FromBase64String(signature),
+  HashAlgorithmName.SHA256,
+  RSASignaturePadding.Pkcs1
+);`,
+    response: `Valid signature: continue processing.
+Invalid signature: reject the response or callback.`,
   },
   "ipg-signing-example": {
     title: "Step-by-Step Signing Example",
@@ -882,13 +1110,28 @@ CustomerIdentifier=SZ-1868
 BoolExample=true
 EmptyExample=`,
     response: `amount:1.00;bannerindex:1;boolexample:1;currency:975;customeridentifier:SZ-1868;customerip:127.0.0.1;emptyexample:;ipgmethod:IPGPurchase;ipgversion:4.5;keyindex:1;keyindexresp:1;language:en;mid:000000000000113;midname:IPG TEST 4.5;orderid:8A540554-1551-4533-B246-42CAD55EE8DE;originator:33`,
-    example: `Starting with these request parameters (before signing):
-IPGmethod=IPGPurchase, KeyIndex=1, KeyIndexResp=1, IPGVersion=4.5
-Language=en, Originator=33, BannerIndex=1, MID=000000000000113
-Currency=975, MIDName=IPG TEST 4.5, CustomerIP=127.0.0.1
-OrderID=8A540554-1551-4533-B246-42CAD55EE8DE
-CustomerIdentifier=SZ-1868, BoolExample=true, EmptyExample=""
-After removing Signature and lowercasing keys, then sorting:
+    example: `Initial data includes request parameters and an empty placeholder for Signature.
+Before signing, remove the Signature parameter completely.
+
+Lowercase keys and convert values into canonical strings:
+ipgmethod:IPGPurchase
+keyindex:1
+keyindexresp:1
+ipgversion:4.5
+language:en
+originator:33
+bannerindex:1
+mid:000000000000113
+currency:975
+amount:1.00
+midname:IPG TEST 4.5
+customerip:127.0.0.1
+orderid:8A540554-1551-4533-B246-42CAD55EE8DE
+customeridentifier:SZ-1868
+boolexample:1
+emptyexample:
+
+Natural sorted order:
 amount:1.00
 bannerindex:1
 boolexample:1
@@ -905,42 +1148,72 @@ mid:000000000000113
 midname:IPG TEST 4.5
 orderid:8A540554-1551-4533-B246-42CAD55EE8DE
 originator:33
-Joined with semicolons (the string to sign):
-amount:1.00;bannerindex:1;boolexample:1;currency:975;customeridentifier:SZ-1868;customerip:127.0.0.1
-;emptyexample:;ipgmethod:IPGPurchase;ipgversion:4.5;keyindex:1;keyindexresp:1;language:en;mid:000000
-000000113;midname:IPG TEST 4.5;orderid:8A540554-1551-4533-B246-42CAD55EE8DE;originator:33
+
+String to sign:
+amount:1.00;bannerindex:1;boolexample:1;currency:975;customeridentifier:SZ-1868;customerip:127.0.0.1;emptyexample:;ipgmethod:IPGPurchase;ipgversion:4.5;keyindex:1;keyindexresp:1;language:en;mid:000000000000113;midname:IPG TEST 4.5;orderid:8A540554-1551-4533-B246-42CAD55EE8DE;originator:33
+
+PHP generation:
+$privateKey = openssl_get_privatekey($privateKeyString);
+openssl_sign($dataToSign, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+$base64Signature = base64_encode($signature);
+
+C# generation:
+var privateCert = File.ReadAllText(privateKeyString);
+var key = RSA.Create();
+key.ImportFromPem(privateCert.ToCharArray());
+var sha = SHA256.Create();
+var signature = key.SignHash(sha.ComputeHash(Encoding.UTF8.GetBytes(dataToSign)), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+var base64Signature = Convert.ToBase64String(signature);
+
 Final Signature value:
-PNYhiEtXvwTB2ixMID+hYuJIc7+VUlYcQzyH9xXTSGm2K7NiSNBe9oYeyv0Bi0e==`,
+PNYhiEtXvwTB2ixMID+hYuJIc7+VUlYcQzyH9xXTSGm2K7NiSNBe9oYeyv0Bi0e==
+
+Verification follows the same canonicalization. Remove Signature from the callback or response body, lowercase and flatten the remaining JSON fields, sort naturally, join with semicolons, then verify the decoded signature with the iCard public key.`,
   },
   "ipg-callbacks": {
     title: "Callbacks",
     subtitle: "Callbacks",
     description:
-      "A callback is an HTTP POST sent from IPG to the merchant URL_Notify endpoint with JSON payment outcome details and a Signature.",
-    facts: ["JSON POST", "Verify Signature", "Respond HTTP 200 OK", "Store CardToken when present"],
+      "A callback is a system message sent from the IPG API payment platform to the merchant web service.",
+    facts: ["HTTP POST", "URL_Notify", "Verify Signature", "Respond HTTP 200 OK"],
     body: [
-      "Accept callbacks only from iCard IP addresses provided by iCard support.",
-      "Validate Signature before updating orders, notifying customers, or storing tokens.",
-      "The callback, not the browser redirect, is the reliable backend confirmation channel.",
+      "Callbacks contain information about a specific event in the payment platform that usually takes place while processing a payment or storing customer payment data.",
+      "The callback is the reliable backend channel for payment outcome and stored-card information. Browser redirects should not be treated as settlement confirmation.",
+      "Every callback must be accepted only from the payment platform IP addresses provided by iCard technical support and must be verified by checking the included Signature.",
     ],
+    tables: [callbackHandlingStepsTable],
   },
   "ipg-callback-retries": {
     title: "Handling & Retries",
     subtitle: "Callbacks",
     description:
-      "The merchant endpoint must respond with the correct HTTP status so IPG can determine whether the callback was accepted.",
+      "The merchant endpoint must respond with the correct synchronous HTTP status so IPG can determine whether the callback was accepted.",
     body: [
-      "Return HTTP 200 OK when the callback is valid and processed.",
-      "Return HTTP 400 Bad Request when a parameter cannot be parsed.",
-      "Return HTTP 500 Internal Server Error for incorrect URL routing or server problems.",
-      "Any non-200 response causes IPG to resend the callback according to the retry schedule.",
+      "Confirm callback receipt by returning 200 OK when no errors have been detected.",
+      "If an error is detected, return a response code that corresponds to the error type, such as 400 Bad Request for parsing issues or 500 Internal Server Error for incorrect URL routing or server problems.",
+      "If 200 OK is not received, the callback is sent again regardless of the error type.",
+      "Automatic callback delivery attempts generally do not exceed one day and stop after a total of 53 attempts.",
     ],
-    tables: [retryScheduleTable],
+    tables: [callbackResponseCodesTable, retryScheduleTable],
+  },
+  "ipg-callback-troubleshooting": {
+    title: "Callback Troubleshooting",
+    subtitle: "Callbacks",
+    description:
+      "Use this page when callbacks are not received at the specified URL_Notify endpoints.",
+    facts: ["Check requests", "Check callback URLs", "Verify reachability", "Contact iCard support"],
+    body: [
+      "There can be cases when callbacks are not received at the specified URLs for different reasons.",
+      "The first split is whether callbacks are not triggered by any event at all, or whether requests are accepted but delivery to the merchant URL is failing.",
+      "Start by confirming that the correct requests were sent and accepted by the platform, then verify that the callback URLs are correct and reachable.",
+    ],
+    tables: [callbackTroubleshootingTable],
+    resources: [resources.integrationSupport, resources.customerSupport],
   },
   "ipg-callback-payment": {
     title: "Object Payment",
     subtitle: "Callbacks",
-    description: "The mandatory Payment object contains the main transaction identity and status information.",
+    description: "This mandatory object contains essential payment details and merchant transaction identifiers.",
     fieldSections: [{ title: "Payment Parameters", fields: callbackPaymentFields }],
   },
   "ipg-callback-carddata": {
@@ -972,33 +1245,195 @@ PNYhiEtXvwTB2ixMID+hYuJIc7+VUlYcQzyH9xXTSGm2K7NiSNBe9oYeyv0Bi0e==`,
     title: "Common Callback Examples",
     subtitle: "Callbacks",
     description:
-      "The callback examples cover success, merchant validation failure, and declined 3DS states.",
-    facts: ["Success", "Merchant validation error", "3DS frictionless decline", "3DS challenge decline"],
-    example: `Success Payment Callback
+      "The callback examples cover declined 3DS flows, failed merchant validation, declined authorization, and successful authorization.",
+    facts: ["Declined 3DS frictionless", "Failed merchant validation", "Declined 3DS challenge", "Declined payment", "Success payment"],
+    body: [
+      "Use these callback examples as reference payloads for the most common payment outcomes. The merchant must verify the included Signature before changing order state, storing card data, or notifying the customer.",
+      "Each example is shown separately so implementation teams can compare the Payment, Operation, Errors, and Signature structure without using the right-side request/response/example rail.",
+    ],
+    example: `Declined 3DS - frictionless flow
 {
+  "CardData": {
+    "Pan": "400609***0007",
+    "Type": "VISA",
+    "CardholderName": "Test",
+    "ExpMonth": "06",
+    "ExpYear": "26"
+  },
+  "Customer": {
+    "Email": "test@test.com",
+    "Phone": "+35988123456",
+    "Identifier": "SZ-1868",
+    "IPAddress": "127.0.0.1"
+  },
+  "Payment": {
+    "OrderId": "3AC309F6-5184-4721-B3E1-8CA08070235B",
+    "MID": "000000000000113",
+    "Date": "2025-05-14T10:45:30+03:00",
+    "Type": "IPGPurchase",
+    "Context": "",
+    "Status": "declined",
+    "Sum": { "Amount": "20.00", "Currency": 975 },
+    "Interface": "modal",
+    "Description": "note"
+  },
+  "Operation": {
+    "Type": "3ds_authentication",
+    "Status": "declined",
+    "Date": "2025-05-14T10:45:30+03:00",
+    "Code": 3008,
+    "Message": "No Card record",
+    "Sum": { "Amount": "20.00", "Currency": 975 }
+  },
+  "Signature": "CX7IqNnJGHej9nzd ... PoZXJHkoTpBMGMuybblrG9jU="
+}
+
+Failed merchant validation
+{
+  "Payment": {
+    "OrderId": "1A3BBFE5-78B4-46C6-900A-853006365A08",
+    "MID": "000000000000112",
+    "Date": "2025-05-14T10:40:11+03:00",
+    "Type": "IPGPurchase",
+    "Context": "",
+    "Status": "declined",
+    "Sum": { "Amount": "1.00", "Currency": 978 },
+    "Interface": "redirect",
+    "Description": "notee"
+  },
+  "Operation": { "Type": "merchant_validation", "Status": "declined", "Code": 9005 },
+  "Errors": [
+    {
+      "Code": 9033,
+      "Description": "Invalid banner index",
+      "Field": "BannerIndex",
+      "Message": "Invalid integer for banner index value"
+    }
+  ],
+  "Signature": "RmGl2DCsQba8 ... 3eqNbjXBVSUdb3Lxx9zCWu/M="
+}
+
+Declined 3DS - challenge flow
+{
+  "CardData": {
+    "Pan": "400609***0007",
+    "Type": "VISA",
+    "CardholderName": "Test",
+    "ExpMonth": "06",
+    "ExpYear": "26"
+  },
+  "Customer": {
+    "Email": "test@test.com",
+    "Phone": "+35988123456",
+    "Identifier": "SZ-1868",
+    "IPAddress": "127.0.0.1"
+  },
+  "Payment": {
+    "OrderId": "99D72F74-0A57-43B7-A948-2AB4E1145662",
+    "MID": "000000000000113",
+    "Date": "2025-05-14T10:53:20+03:00",
+    "Type": "IPGPurchase",
+    "Context": "",
+    "Status": "declined",
+    "Sum": { "Amount": "201.00", "Currency": 975 },
+    "Interface": "modal",
+    "Description": "note"
+  },
+  "Operation": {
+    "Type": "3ds_challenge",
+    "Status": "declined",
+    "Date": "2025-05-14T10:53:20+03:00",
+    "Code": 3001,
+    "Message": "Card authentication failed",
+    "Sum": { "Amount": "201.00", "Currency": 975 }
+  },
+  "Signature": "CX7IqNnJGHej9nzd ... PoZXJHkoTpBMGMuybblrG9jU="
+}
+
+Declined payment
+{
+  "CardData": {
+    "Pan": "539260***6203",
+    "Type": "MasterCard",
+    "CardholderName": "Test",
+    "ExpMonth": "06",
+    "ExpYear": "25"
+  },
+  "Customer": {
+    "Email": "test@test.com",
+    "Phone": "+35988123456",
+    "Identifier": "SZ-1868",
+    "IPAddress": "127.0.0.1"
+  },
+  "Payment": {
+    "OrderId": "E34C4058-D375-4B19-A2FF-8FA0EAC4639E",
+    "MID": "000000000000113",
+    "Date": "2025-05-14T10:56:04+03:00",
+    "Type": "IPGPurchase",
+    "Context": "",
+    "Status": "declined",
+    "Sum": { "Amount": "20.00", "Currency": 975 },
+    "Interface": "modal",
+    "Description": "note"
+  },
+  "Operation": {
+    "Type": "authorization",
+    "Status": "declined",
+    "Date": "2025-05-14T10:56:04+03:00",
+    "Code": 1005,
+    "Message": "Refer to card Issuer",
+    "Sum": { "Amount": "20.00", "Currency": 975 },
+    "Provider": {
+      "Trn": "20250514075602257447",
+      "Date": "2025-05-14T10:56:02+03:00",
+      "RespCode": "05"
+    }
+  },
+  "Signature": "CX7IqNnJGHej9nzd ... PoZXJHkoTpBMGMuybblrG9jU="
+}
+
+Success payment
+{
+  "CardData": {
+    "Pan": "532610***0004",
+    "Type": "MasterCard",
+    "CardholderName": "Test",
+    "ExpMonth": "06",
+    "ExpYear": "25"
+  },
+  "Customer": {
+    "Email": "test@test.com",
+    "Phone": "+35988123456",
+    "Identifier": "SZ-1868",
+    "IPAddress": "127.0.0.1"
+  },
   "Payment": {
     "OrderId": "4C498AA8-DA12-4D5D-94C3-257A29415DAF",
     "MID": "000000000000113",
+    "Date": "2025-05-14T10:51:43+03:00",
     "Type": "IPGPurchase",
+    "Context": "",
     "Status": "success",
+    "Sum": { "Amount": "20.00", "Currency": 975 },
     "Interface": "modal",
-    "Sum": { "Amount": "20.00", "Currency": 975 }
+    "Description": "note"
   },
   "Operation": {
     "Type": "authorization",
     "Status": "success",
+    "Date": "2025-05-14T10:51:43+03:00",
     "Code": 0,
     "Message": "Success",
-    "Provider": { "RespCode": "00", "Approval": "SWCSIM" },
+    "Sum": { "Amount": "20.00", "Currency": 975 },
+    "Provider": {
+      "Trn": "20250514075143257397",
+      "Date": "2025-05-14T10:51:41+03:00",
+      "RespCode": "00",
+      "Approval": "SWCSIM"
+    },
     "Eci": "05"
   },
-  "Signature": "..."
-}
-Failed Merchant Validation Callback
-{
-  "Operation": { "Type": "merchant_validation", "Status": "declined", "Code": 9005 },
-  "Errors": [{ "Code": 9033, "Field": "BannerIndex", "Message": "Invalid integer for banner index value" }],
-  "Signature": "..."
+  "Signature": "CX7IqNnJGHej9nzd ... PoZXJHkoTpBMGMuybblrG9jU="
 }`,
   },
   "ipg-redirect-overview": {
@@ -1569,6 +2004,7 @@ Signature=<base64-signature>`,
 };
 
 const sharedGeneralItems = [
+  { id: "ipg-integration-steps", label: "Integration steps", type: "guide" },
   { id: "ipg-http-post", label: "HTTP POST", type: "guide" },
   { id: "ipg-data-types", label: "Data type formats", type: "schema" },
   { id: "ipg-security", label: "Security & signatures", type: "guide" },
@@ -1590,6 +2026,7 @@ const callbackDocumentationGroup = {
   items: [
     { id: "ipg-callbacks", label: "Callbacks overview", type: "guide" },
     { id: "ipg-callback-retries", label: "Handling & retries", type: "guide" },
+    { id: "ipg-callback-troubleshooting", label: "Troubleshooting", type: "guide" },
     { id: "ipg-callback-payment", label: "Object Payment", type: "schema" },
     { id: "ipg-callback-carddata", label: "Object CardData", type: "schema" },
     { id: "ipg-callback-customer", label: "Object Customer", type: "schema" },
@@ -1761,12 +2198,13 @@ const gamblingContent = {
       "Focused IPG 4.5 reference for Gambling merchants, including only the applicable checkout, wallet, backend, callback, and signature sections.",
     facts: ["Protocol 4.5", "BM Gambling", "Deposits and gaming withdrawals", "RSA-SHA256 signatures"],
     body: [
+      ...ipgIntroductionBody,
       "This view keeps the shared IPG settings, signature rules, HTTP POST format, and callback handling, but filters the method list to the Gambling business model.",
       "For deposits, use redirect, embedded, modal, Google Pay redirect, Apple Pay redirect, or Apple Pay only JS SDK depending on the merchant experience.",
       "For withdrawals, use IPGOCT. Use IPGGetTxnStatus only as a reference check for OCT timeout cases, and implement IPGReversal because it is mandatory for all merchants.",
     ],
     resources: [resources.gamblingApi],
-    tables: [gamblingImplementationTable, gamblingRequiredMethodsTable],
+    tables: [ipgProvidesTable, ipgOutOfScopeTable, gamblingImplementationTable, gamblingRequiredMethodsTable],
     request: `IPGmethod=IPGPurchase
 IPGVersion=4.5
 Originator=33
@@ -1785,12 +2223,13 @@ Reversal is mandatory for previously executed payments when reversal is needed.`
       "Focused IPG 4.5 reference for Gambling merchants, including only the applicable checkout, wallet, backend, callback, and signature sections.",
     facts: ["Protocol 4.5", "BM Gambling", "Deposits and gaming withdrawals", "RSA-SHA256 signatures"],
     body: [
+      ...ipgIntroductionBody,
       "This view keeps the shared IPG settings, signature rules, HTTP POST format, and callback handling, but filters the method list to the Gambling business model.",
       "For deposits, use redirect, embedded, modal, Google Pay redirect, Apple Pay redirect, or Apple Pay only JS SDK depending on the merchant experience.",
       "For withdrawals, use IPGOCT. Use IPGGetTxnStatus only as a reference check for OCT timeout cases, and implement IPGReversal because it is mandatory for all merchants.",
     ],
     resources: [resources.gamblingApi],
-    tables: [gamblingImplementationTable, gamblingRequiredMethodsTable],
+    tables: [ipgProvidesTable, ipgOutOfScopeTable, gamblingImplementationTable, gamblingRequiredMethodsTable],
     request: `IPGmethod=IPGPurchase
 IPGVersion=4.5
 Originator=33
@@ -1920,10 +2359,11 @@ const financialInstitutionContent = {
       "Focused IPG 4.5 entry point for Financial Institution integrations.",
     facts: ["Protocol 4.5", "BM Financial Institution", "Funds disbursement", "RSA-SHA256 signatures"],
     body: [
+      ...ipgIntroductionBody,
       "This view filters the navigation to the Financial Institution methods while keeping the shared IPG settings, signing, and callback sections.",
       "Use IPGFundsDisbursement for the model-specific payout method, IPGGetTxnStatus for backend status checks, and IPGReversal where a previously executed payment must be reversed.",
     ],
-    tables: [featureMatrixTable, backendComparisonTable],
+    tables: [ipgProvidesTable, ipgOutOfScopeTable, featureMatrixTable, backendComparisonTable],
   },
   "ipg-financial-overview": {
     title: "IPG 4.5 - Financial Institution Business Model",
@@ -1932,10 +2372,11 @@ const financialInstitutionContent = {
       "Focused IPG 4.5 entry point for Financial Institution integrations.",
     facts: ["Protocol 4.5", "BM Financial Institution", "Funds disbursement", "RSA-SHA256 signatures"],
     body: [
+      ...ipgIntroductionBody,
       "This view filters the navigation to the Financial Institution methods while keeping the shared IPG settings, signing, and callback sections.",
       "Use IPGFundsDisbursement for the model-specific payout method, IPGGetTxnStatus for backend status checks, and IPGReversal where a previously executed payment must be reversed.",
     ],
-    tables: [featureMatrixTable, backendComparisonTable],
+    tables: [ipgProvidesTable, ipgOutOfScopeTable, featureMatrixTable, backendComparisonTable],
   },
   "ipg-financial-functions": {
     title: "Financial Institution Function Scope",
@@ -1975,10 +2416,11 @@ const ecommerceContent = {
       "Focused IPG 4.5 entry point for ECommerce integrations.",
     facts: ["Protocol 4.5", "BM ECommerce", "Refunds", "RSA-SHA256 signatures"],
     body: [
+      ...ipgIntroductionBody,
       "This view filters the navigation to the ECommerce methods while keeping the shared IPG settings, signing, and callback sections.",
       "Use IPGRefund for post-payment refunds and IPGReversal for payments that must be reversed before settlement.",
     ],
-    tables: [featureMatrixTable, backendComparisonTable],
+    tables: [ipgProvidesTable, ipgOutOfScopeTable, featureMatrixTable, backendComparisonTable],
   },
   "ipg-ecommerce-overview": {
     title: "IPG 4.5 - ECommerce Business Model",
@@ -1987,10 +2429,11 @@ const ecommerceContent = {
       "Focused IPG 4.5 entry point for ECommerce integrations.",
     facts: ["Protocol 4.5", "BM ECommerce", "Refunds", "RSA-SHA256 signatures"],
     body: [
+      ...ipgIntroductionBody,
       "This view filters the navigation to the ECommerce methods while keeping the shared IPG settings, signing, and callback sections.",
       "Use IPGRefund for post-payment refunds and IPGReversal for payments that must be reversed before settlement.",
     ],
-    tables: [featureMatrixTable, backendComparisonTable],
+    tables: [ipgProvidesTable, ipgOutOfScopeTable, featureMatrixTable, backendComparisonTable],
   },
   "ipg-ecommerce-functions": {
     title: "ECommerce Function Scope",
