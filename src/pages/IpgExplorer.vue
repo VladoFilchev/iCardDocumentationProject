@@ -280,7 +280,7 @@
         </section>
 
         <section v-if="activeExamples.length" class="doc-section">
-          <h2>Examples</h2>
+          <h2>{{ active.examplesTitle || "Examples" }}</h2>
           <div class="callback-example-grid">
             <article
               v-for="example in activeExamples"
@@ -321,6 +321,23 @@
               <span class="mini-label">Example message</span>
             </div>
             <pre><code>{{ active.example }}</code></pre>
+          </div>
+
+          <div v-if="hasDifferenceContent" class="difference-panel">
+            <div class="code-panel-header">
+              <div class="code-label">Version Differences</div>
+              <span class="mini-label">{{ selectedVersionMeta.label }}</span>
+            </div>
+            <div class="difference-list">
+              <div
+                v-for="item in activeDifferences"
+                :key="item.title"
+                class="difference-item"
+              >
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.description }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </aside>
@@ -391,6 +408,10 @@ function normalizeSectionId(value) {
 function normalizeVersion(value) {
   const version = Array.isArray(value) ? value[0] : value;
   return ipgVersions.some((item) => item.id === version) ? version : "4.5";
+}
+
+function getSingleQueryValue(value) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function normalizeBusinessModel(value) {
@@ -468,7 +489,12 @@ watch(
 watch(
   () => route.query.version,
   (newValue) => {
-    selectedVersion.value = normalizeVersion(newValue);
+    const normalized = normalizeVersion(newValue);
+    selectedVersion.value = normalized;
+    const version = getSingleQueryValue(newValue);
+    if (version && version !== normalized) {
+      updateIpgRoute({ version: normalized });
+    }
   }
 );
 
@@ -586,8 +612,16 @@ const hasResponseSnippet = computed(() => hasSnippet(active.value?.response));
 const hasExampleSnippet = computed(
   () => activeId.value !== "ipg-callback-examples" && hasSnippet(active.value?.example)
 );
+const activeDifferences = computed(() =>
+  Array.isArray(active.value?.differences) ? active.value.differences : []
+);
+const hasDifferenceContent = computed(() => activeDifferences.value.length > 0);
 const hasCodeContent = computed(
-  () => hasRequestSnippet.value || hasResponseSnippet.value || hasExampleSnippet.value
+  () =>
+    hasRequestSnippet.value ||
+    hasResponseSnippet.value ||
+    hasExampleSnippet.value ||
+    hasDifferenceContent.value
 );
 
 function updateIpgRoute(nextQuery) {
@@ -598,6 +632,11 @@ function updateIpgRoute(nextQuery) {
       ...nextQuery,
     },
   });
+}
+
+const initialVersionQuery = getSingleQueryValue(route.query.version);
+if (initialVersionQuery && initialVersionQuery !== selectedVersion.value) {
+  updateIpgRoute({ version: selectedVersion.value });
 }
 
 function selectSection(sectionId) {

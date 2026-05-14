@@ -746,7 +746,7 @@ const keyFieldDifferencesTable = table(
     ["MobileNumber in IPGPurchase", "Mandatory", "Mandatory", "Mandatory"],
     ["OrderID max length in IPGPurchase", "50 characters", "50 characters", "50 characters"],
     ["OrderID max length in backend payout", "50 characters for IPGOCT", "255 characters for IPGFundsDisbursement", "50 characters for IPGRefund"],
-    ["CardToken parameter name (4.5)", "CardToken, renamed from Token in v4.3", "CardToken, renamed from Token in v4.3", "CardToken, renamed from Token in v4.3"],
+    ["CardToken parameter name (4.5)", "CardToken, renamed from Token in earlier versions", "CardToken, renamed from Token in earlier versions", "CardToken, renamed from Token in earlier versions"],
     ["Callback StoreCard.CardToken description", "Token for subsequent payments when customer saves card", "Token for subsequent payments when customer saves card", "Token used in IPG3DSPurchaseWithStoredCard"],
     ["Google Pay IPGTokenizedCardPurchase availability", "Not applicable; uses redirect", "Full JS SDK flow required", "Full JS SDK flow required"],
     ["Apple Pay IPGTokenProviderSession availability", "Not applicable; uses redirect", "Required for JS SDK flow", "Required for JS SDK flow"],
@@ -754,7 +754,7 @@ const keyFieldDifferencesTable = table(
   ]
 );
 const protocolChangesTable = table(
-  "Protocol 4.3 to 4.5 Changes",
+  "Protocol 4.2 to 4.5 Changes",
   ["Feature", "Change in v4.5"],
   [
     ["Signature", "New RSA-SHA256 algorithm with natural sort order."],
@@ -788,8 +788,8 @@ export const ipgVersionDocuments = {
         "Summary page for clients integrating against IPG 4.2 or migrating from 4.2 to the current 4.5 reference.",
       facts: ["Legacy version", "High-level migration notes", "Compare against 4.5"],
       body: [
-        "The main documentation sections in this explorer describe the current 4.5 integration model. Use this final page as the version-specific summary for 4.2 integrations.",
-        "If a merchant is still on 4.2, confirm the exact enabled protocol with iCard before implementation. The key migration risks are request signing, callback confirmation, redirect result handling, and renamed token fields.",
+        "The 4.2 documentation sections in this explorer now follow IPG_API_v4.2_rev.36_20250416. They keep the same high-level structure, but use the 4.2 method set, notification model, stored-card Token fields, CartItems requirement, and Payment Modal flow.",
+        "If a merchant is still on 4.2, confirm the exact enabled protocol with iCard before implementation. The key migration risks compared with 4.5 are request signing, notification acknowledgement, redirect result handling, CartItems, and the Token to CardToken change.",
       ],
       tables: [
         table(
@@ -803,46 +803,6 @@ export const ipgVersionDocuments = {
             ["Embedded / widget", "Older widget-style integrations may exist.", "Use IPGEmbeddedPayment for embedded checkout.", "Plan a frontend integration update if widgets are present."],
             ["Modal", "Older token/modal request rules may differ.", "IPGPaymentToken returns the token used by payment-modal.js.", "Review modal bootstrap and URL_Notify handling."],
             ["Backend operations", "Older backend responses may differ.", "4.5 adds or changes response fields for reversal and payout methods.", "Update parsers, reconciliation, and timeout handling."],
-          ]
-        ),
-      ],
-    },
-  },
-  "4.3": {
-    id: "4.3",
-    label: "Protocol 4.3",
-    status: "Legacy",
-    description: "Legacy integrations should review the 4.3 to 4.5 differences before migration.",
-    summary: {
-      title: "IPG 4.3 Summary",
-      subtitle: "Version Summary",
-      description:
-        "Summary page for clients integrating against IPG 4.3 or migrating from 4.3 to the current 4.5 reference.",
-      facts: ["Legacy version", "Detailed 4.3 to 4.5 differences", "Migration checklist"],
-      body: [
-        "The main documentation sections in this explorer describe the current 4.5 integration model. Use this final page as the version-specific summary for 4.3 integrations.",
-        "The largest changes from 4.3 to 4.5 are the new signing algorithm, JSON callbacks replacing notify methods, redirect confirmation behavior, and the Token to CardToken rename.",
-      ],
-      tables: [
-        table(
-          "Key Differences: 4.3 to 4.5",
-          ["Area", "4.3 behavior", "4.5 behavior", "Integration impact"],
-          [
-            ["Signature", "Older signing algorithm.", "RSA-SHA256 canonicalization with natural sort order.", "Update request signing and response/callback verification helpers."],
-            ["Notifications", "Notify methods were used.", "JSON callbacks to URL_Notify replace notify methods.", "Implement signed JSON callback handling and persistence."],
-            ["Missed notification behavior", "Missed notification could trigger reversal behavior.", "IPG retries callbacks until HTTP 200 OK is received, up to 53 attempts.", "Return the correct HTTP status and make callback processing idempotent."],
-            ["Redirect result", "Redirect behavior could include result data in older flows.", "URL_OK and URL_Cancel redirects use GET and send no payload.", "Do not use browser redirect data as payment confirmation."],
-            ["Token encryption", "Token encryption was required in stored-card, modal, and payout-related methods.", "Token encryption requirement is removed.", "Simplify token handling but keep secure storage controls."],
-            ["CartItems", "CartItems could be required.", "CartItems requirement is removed from all methods.", "Remove CartItems dependency from request builders."],
-            ["FieldsOrder", "Backend responses could include FieldsOrder.", "FieldsOrder is eliminated from backend method responses.", "Do not depend on response ordering metadata."],
-            ["PostResultAction", "Not available in the same form.", "New redirect field with Redirect or CloseWindow values.", "Choose browser behavior explicitly for redirect implementations."],
-            ["Embedded checkout", "Widget integrations existed.", "Widget integrations are removed; use IPGEmbeddedPayment.", "Migrate widget-style integrations to embedded checkout."],
-            ["Stored-card purchase", "Billing address requirements were stricter.", "Billing address fields are no longer mandatory for IPG3DSPurchaseWithStoredCard.", "Review validation rules and remove unnecessary blockers."],
-            ["IPGReversal", "Older request shape.", "OrderID and MID are added.", "Include OrderID and MID in reversal requests."],
-            ["OrderID length", "Older model-specific lengths may differ.", "50 characters except IPGFundsDisbursement in BM CI, which allows 255.", "Validate OrderID length per method and business model."],
-            ["Stored card token parameter", "Token.", "CardToken.", "Rename parameters and update callback/token storage mapping."],
-            ["Payout responses", "Older response parameter set.", "IPGOCT and IPGFundsDisbursement response parameters changed and new fields were added.", "Update response parsers and reconciliation mapping."],
-            ["Error codes", "Older error code catalog.", "New error codes and messages added.", "Refresh error handling and merchant-facing diagnostics."],
           ]
         ),
       ],
@@ -947,7 +907,7 @@ export const ipgMenu = [
       { id: "ipg-feature-matrix", label: "Feature matrix", type: "schema" },
       { id: "ipg-payment-availability", label: "Payment method availability", type: "schema" },
       { id: "ipg-key-field-differences", label: "Key field differences", type: "schema" },
-      { id: "ipg-protocol-changes", label: "4.3 to 4.5 changes", type: "schema" },
+      { id: "ipg-protocol-changes", label: "4.2 to 4.5 changes", type: "schema" },
     ],
   },
 ];
@@ -989,8 +949,9 @@ export const ipgContent = {
       "All parameters for requests are placed in the body in [parameter=value] form.",
       "The separator between tokens is [&]. The body is URL encoded and the character encoding is UTF-8.",
       "The Signature parameter must be appended as the last parameter in the POST body for signed requests.",
+      "Sandbox endpoint: https://dev-ipg.icards.eu/sandbox/",
+      "Production endpoint: https://ipg.icard.com/",
     ],
-    resources: [resources.sandboxEndpoint, resources.productionEndpoint],
     request: `POST /sandbox/ HTTP/2
 Host: dev-ipg.icards.eu
 User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0
@@ -1091,9 +1052,15 @@ Invalid signature: reject the response or callback.`,
       "The PDF includes a concrete canonical string example for IPGPurchase.",
     body: [
       "The example starts from an IPGPurchase request, removes Signature, lowercases keys, normalizes BoolExample=true to boolexample:1, preserves EmptyExample as emptyexample:, sorts naturally, and joins with semicolons.",
+      "Each card below represents one signing step. Follow them in order to build the canonical string, sign it with RSA-SHA256, and add the resulting Base64 value to the request.",
     ],
     resources: [resources.productionSignatureGenerator],
-    request: `IPGmethod=IPGPurchase
+    examplesTitle: "Signing Steps",
+    examples: [
+      {
+        title: "1. Start From Request Parameters",
+        description: "Use all request fields before signing and do not include Signature in the data to sign.",
+        code: `IPGmethod=IPGPurchase
 KeyIndex=1
 KeyIndexResp=1
 IPGVersion=4.5
@@ -1109,12 +1076,11 @@ OrderID=8A540554-1551-4533-B246-42CAD55EE8DE
 CustomerIdentifier=SZ-1868
 BoolExample=true
 EmptyExample=`,
-    response: `amount:1.00;bannerindex:1;boolexample:1;currency:975;customeridentifier:SZ-1868;customerip:127.0.0.1;emptyexample:;ipgmethod:IPGPurchase;ipgversion:4.5;keyindex:1;keyindexresp:1;language:en;mid:000000000000113;midname:IPG TEST 4.5;orderid:8A540554-1551-4533-B246-42CAD55EE8DE;originator:33`,
-    example: `Initial data includes request parameters and an empty placeholder for Signature.
-Before signing, remove the Signature parameter completely.
-
-Lowercase keys and convert values into canonical strings:
-ipgmethod:IPGPurchase
+      },
+      {
+        title: "2. Normalize Fields",
+        description: "Lowercase keys, convert Boolean true to 1, and preserve empty values as empty strings.",
+        code: `ipgmethod:IPGPurchase
 keyindex:1
 keyindexresp:1
 ipgversion:4.5
@@ -1129,10 +1095,12 @@ customerip:127.0.0.1
 orderid:8A540554-1551-4533-B246-42CAD55EE8DE
 customeridentifier:SZ-1868
 boolexample:1
-emptyexample:
-
-Natural sorted order:
-amount:1.00
+emptyexample:`,
+      },
+      {
+        title: "3. Sort Naturally",
+        description: "Sort every canonical field string in natural order before joining them.",
+        code: `amount:1.00
 bannerindex:1
 boolexample:1
 currency:975
@@ -1147,28 +1115,43 @@ language:en
 mid:000000000000113
 midname:IPG TEST 4.5
 orderid:8A540554-1551-4533-B246-42CAD55EE8DE
-originator:33
-
-String to sign:
-amount:1.00;bannerindex:1;boolexample:1;currency:975;customeridentifier:SZ-1868;customerip:127.0.0.1;emptyexample:;ipgmethod:IPGPurchase;ipgversion:4.5;keyindex:1;keyindexresp:1;language:en;mid:000000000000113;midname:IPG TEST 4.5;orderid:8A540554-1551-4533-B246-42CAD55EE8DE;originator:33
-
-PHP generation:
+originator:33`,
+      },
+      {
+        title: "4. Build String To Sign",
+        description: "Join the sorted strings with semicolons. This exact UTF-8 string is signed.",
+        code: `amount:1.00;bannerindex:1;boolexample:1;currency:975;customeridentifier:SZ-1868;customerip:127.0.0.1;emptyexample:;ipgmethod:IPGPurchase;ipgversion:4.5;keyindex:1;keyindexresp:1;language:en;mid:000000000000113;midname:IPG TEST 4.5;orderid:8A540554-1551-4533-B246-42CAD55EE8DE;originator:33`,
+      },
+      {
+        title: "5. Sign And Encode",
+        description: "Sign the canonical string with the merchant private key using SHA-256, then Base64 encode it.",
+        code: `PHP
 $privateKey = openssl_get_privatekey($privateKeyString);
 openssl_sign($dataToSign, $signature, $privateKey, OPENSSL_ALGO_SHA256);
 $base64Signature = base64_encode($signature);
 
-C# generation:
+C#
 var privateCert = File.ReadAllText(privateKeyString);
 var key = RSA.Create();
 key.ImportFromPem(privateCert.ToCharArray());
 var sha = SHA256.Create();
-var signature = key.SignHash(sha.ComputeHash(Encoding.UTF8.GetBytes(dataToSign)), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-var base64Signature = Convert.ToBase64String(signature);
-
-Final Signature value:
+var signature = key.SignHash(
+  sha.ComputeHash(Encoding.UTF8.GetBytes(dataToSign)),
+  HashAlgorithmName.SHA256,
+  RSASignaturePadding.Pkcs1
+);
+var base64Signature = Convert.ToBase64String(signature);`,
+      },
+      {
+        title: "6. Add Signature",
+        description: "Add the final Base64 signature value to the request body and use the same canonicalization for verification.",
+        code: `Final Signature value:
 PNYhiEtXvwTB2ixMID+hYuJIc7+VUlYcQzyH9xXTSGm2K7NiSNBe9oYeyv0Bi0e==
 
-Verification follows the same canonicalization. Remove Signature from the callback or response body, lowercase and flatten the remaining JSON fields, sort naturally, join with semicolons, then verify the decoded signature with the iCard public key.`,
+Verification follows the same canonicalization.
+Remove Signature from the callback or response body, lowercase and flatten the remaining JSON fields, sort naturally, join with semicolons, then verify the decoded signature with the iCard public key.`,
+      },
+    ],
   },
   "ipg-callbacks": {
     title: "Callbacks",
@@ -1996,12 +1979,953 @@ Signature=<base64-signature>`,
     tables: [keyFieldDifferencesTable],
   },
   "ipg-protocol-changes": {
-    title: "Protocol 4.3 to 4.5 Changes",
+    title: "Protocol 4.2 to 4.5 Changes",
     subtitle: "Business Models",
     description: "Summary of protocol-wide changes introduced in version 4.5.",
     tables: [protocolChangesTable],
   },
 };
+
+const v42SignatureField = f(
+  "Signature",
+  "Byte[] BASE64",
+  "BASE64",
+  "Mandatory",
+  "Signed hash for all properties in the command. Signature is always the last parameter in the POST body."
+);
+
+const v42Differences = [
+  {
+    title: "Signing algorithm",
+    description:
+      "IPG 4.2 signs the Base64 encoding of concatenated POST values. IPG 4.5 uses lowercased keys, flattened paths, natural sorting, semicolon joining, and RSA-SHA256.",
+  },
+  {
+    title: "Notifications",
+    description:
+      "IPG 4.2 sends method-based POST notifications and expects HTTP 200 with body OK. IPG 4.5 uses signed JSON callbacks to URL_Notify.",
+  },
+  {
+    title: "Stored card field",
+    description:
+      "IPG 4.2 uses Token for stored-card flows and the token must be encrypted with the iCard public key. IPG 4.5 uses CardToken.",
+  },
+  {
+    title: "Cart items",
+    description:
+      "IPG 4.2 IPGPurchase requires Cart logical record data and CartItems. The current 4.5 reference removed the CartItems requirement.",
+  },
+  {
+    title: "Methods",
+    description:
+      "IPG 4.2 includes IPGStoreCard, IPGGetStoredCardData, IPGPurchaseWithStoredCard, and recurring methods. The 4.5 explorer uses the newer stored-card and wallet-tokenized method set.",
+  },
+  {
+    title: "Redirect confirmation",
+    description:
+      "IPG 4.2 redirects with method-specific data such as IPGPurchaseOK or IPGPurchaseCancel. For payment confirmation, rely on URL_Notify and the OK acknowledgement flow.",
+  },
+];
+
+const v42DataTypesTable = table(
+  "IPG 4.2 Data Type Formats",
+  ["Data Type in document", "Description", "Example"],
+  [
+    ["int", "Integer", "1"],
+    ["String", "String", "This is a string"],
+    ["A(n)", "Alpha string. n characters required.", "Alpha string"],
+    ["AN(n)", "Alphanumeric string. n characters required.", "Alphanumeric string"],
+    ["N(n)", "Numeric string. n characters required. Number is left-padded with zeroes.", "000123"],
+    ["double", "Numeric string with decimal point. Only point is used.", "34.56"],
+    ["BASE64", "String used to pass binary data converted to Base64.", "YW55IGNhcm5hbCBwbGVhc3VyZQ=="],
+    ["XML", "Simple in-place XML array.", "<ipg_response><status>0</status><status_msg>Success</status_msg></ipg_response>"],
+    ["JSON", "JSON string.", "{\"Field1\":\"value\",\"Field2\":\"value\"}"],
+  ]
+);
+
+const v42MethodInventoryTable = table(
+  "IPG 4.2 Method Inventory",
+  ["Direction", "Method", "Purpose"],
+  [
+    ["Merchant to IPG", "IPGPurchase", "Standard checkout at the web shop."],
+    ["Merchant to IPG", "IPGStoreCard", "Stores a card and returns a Token for later use."],
+    ["Merchant to IPG", "IPGGetStoredCardData", "Retrieves masked data for a previously stored card."],
+    ["Merchant to IPG", "IPGPurchaseWithStoredCard", "Back-end purchase with a previously stored encrypted Token."],
+    ["Merchant to IPG", "IPG3DSPurchaseWithStoredCard", "Stored-card purchase with 3DS verification."],
+    ["Merchant to IPG", "IPGFirstRecurring", "First transaction in a recurring subscription agreement."],
+    ["Merchant to IPG", "IPGSubsequentRecurring", "Subsequent recurring transaction after the initial agreement."],
+    ["Merchant to IPG", "IPGReversal", "Cancels a previously executed payment."],
+    ["Merchant to IPG", "IPGRefund", "Credits the cardholder for a previous payment."],
+    ["Merchant to IPG", "IPGGetTxnStatus", "Returns status and parameters for a previously executed payment."],
+    ["Merchant to IPG", "IPGPaymentTokenRequest", "Back-end request that returns a token for Payment Modal generation."],
+    ["IPG to Merchant", "IPGPurchaseNotify / OK / Cancel / Rollback / DeclineNotify", "Payment notification and redirect methods for IPGPurchase."],
+    ["IPG to Merchant", "IPGStoreCardNotify / OK / Cancel / DeclineNotify", "Store-card notification and redirect methods."],
+    ["IPG to Merchant", "IPG3DSPurchaseWithStoredCardNotify / OK / Cancel / DeclineNotify", "3DS stored-card notification and redirect methods."],
+  ]
+);
+
+const v42TransmissionTable = table(
+  "4.2 Redirect Checkout Flow",
+  ["Step", "Action"],
+  [
+    ["1", "Customer reaches the merchant checkout page."],
+    ["2", "Customer initiates payment."],
+    ["3", "Merchant web server sends IPGPurchase to IPG and redirects the browser to the IPG payment page."],
+    ["4", "Customer enters card data on the IPG page."],
+    ["5", "IPG handles 3DS processing and card-scheme financial messaging."],
+    ["6", "IPG posts the payment result to the merchant URL_Notify method endpoint."],
+    ["7", "Merchant returns HTTP 200 with response body OK."],
+    ["8", "IPG redirects the browser to URL_OK or URL_Cancel with the appropriate method data."],
+  ]
+);
+
+const v42NotificationTypesTable = table(
+  "IPG 4.2 Notification Methods",
+  ["Base flow", "URL_Notify methods", "Redirect methods"],
+  [
+    ["IPGPurchase", "IPGPurchaseNotify, IPGPurchaseDeclineNotify, IPGPurchaseRollback", "IPGPurchaseOK, IPGPurchaseCancel"],
+    ["IPGStoreCard", "IPGStoreCardNotify, IPGStoreCardDeclineNotify, IPGPurchaseRollback", "IPGStoreCardOK, IPGStoreCardCancel"],
+    ["IPG3DSPurchaseWithStoredCard", "IPG3DSPurchaseWithStoredCardNotify, IPG3DSPurchaseWithStoredCardDeclineNotify, IPGPurchaseRollback", "IPG3DSPurchaseWithStoredCardOK, IPG3DSPurchaseWithStoredCardCancel"],
+  ],
+  "The merchant must return HTTP 200 and body OK for URL_Notify calls. Any other response is treated as an error."
+);
+
+const v42CompatibilityTable = table(
+  "4.2 Compatibility Differences",
+  ["Area", "IPG 4.2 behavior", "Current 4.5 behavior"],
+  [
+    ["Signature", "Concatenate POST values, Base64 encode the concatenated string, then sign with SHA-256.", "Build a canonical string from lowercased sorted keys and values, then sign with RSA-SHA256."],
+    ["Callbacks", "Method-based POST notifications. Merchant response body must be exactly OK.", "Signed JSON callbacks to URL_Notify. HTTP 200 confirms receipt."],
+    ["Stored card", "Token is returned and encrypted when reused.", "CardToken is used without the old Token encryption requirement."],
+    ["CartItems", "Cart logical record and CartItems are mandatory for IPGPurchase.", "CartItems requirement removed."],
+    ["Payment modal", "IPGPaymentTokenRequest supports ModalType values and loads payment-modal.js.", "IPGPaymentToken remains, but newer callback/signature behavior applies."],
+    ["Embedded checkout", "The 4.2 PDF describes Payment Modal, not IPGEmbeddedPayment.", "IPGEmbeddedPayment is the documented embedded checkout method."],
+    ["Wallet APIs", "Apple Pay / Google Pay tokenized APIs are not part of this 4.2 PDF.", "TokenProviderSession and TokenizedCardPurchase are documented for wallet flows."],
+  ]
+);
+
+const v42PurchaseRequestFields = [
+  f("KeyIndex", "1", "Int", "Mandatory", "Identifier of the private key used for signature."),
+  f("KeyIndexResp", "1", "Int", "Mandatory", "Identifier of the private key used to build the response signature."),
+  f("Originator", "100", "Int", "Mandatory", "Merchant company identifier."),
+  f("Language", "EN", "A(2)", "Mandatory", "Desired language on the payment page."),
+  f("IPGVersion", "4.2", "String", "Mandatory", "Protocol version used for the transmission."),
+  f("IPGmethod", "IPGPurchase", "String", "Mandatory", "Requested method."),
+  f("BannerIndex", "1", "Int", "Mandatory", "Payment page banner index."),
+  f("MID", "000000000000123", "AN(15)", "Mandatory", "Virtual terminal identifier."),
+  f("MIDName", "Merchant Web Shop", "String", "Mandatory", "Merchant name shown on the payment page."),
+  f("Amount", "23.45", "Double", "Mandatory", "Requested payment amount."),
+  f("Currency", "978", "N(3)", "Mandatory", "ISO numeric currency code."),
+  f("CustomerIP", "82.119.81.30", "String", "Mandatory", "Customer IP address in IPv4 or IPv6 format."),
+  f("OrderID", "DB183FF5-...", "String", "Mandatory", "Merchant order reference. Up to 255 characters in 4.2."),
+  f("OrderLink", "http://site.ext/", "String", "Optional", "Link to the merchant order page."),
+  f("URL_OK", "http://site.ext/paymentOK", "String", "Mandatory", "Redirect URL after successful payment."),
+  f("URL_Cancel", "http://site.ext/paymentNOK", "String", "Mandatory", "Redirect URL when the customer cancels or payment is unsuccessful."),
+  f("URL_Notify", "http://site.ext/paymentNotify", "String", "Mandatory", "Endpoint where IPGPurchaseNotify is posted."),
+  f("Note", "Note", "String", "Optional", "Text associated with the purchase."),
+  f("CustomerIdentifier", "1234", "String", "Optional", "Merchant-side customer credentials, echoed back if sent."),
+  f("Email", "customer@mywebsite.com", "String", "Mandatory", "Cardholder email."),
+  f("MobileNumber", "+359811222111", "String", "Mandatory", "Cardholder mobile number."),
+  f("BillAddrCountry", "100", "String(3)", "Recommended", "ISO 3166-1 numeric billing country code."),
+  f("BillAddrCity", "Sofia", "String(50)", "Recommended", "Billing city."),
+  f("BillAddrPostCode", "1421", "String(16)", "Recommended", "Billing ZIP code."),
+  f("BillAddrState", "22", "String(3)", "Recommended", "Country subdivision code."),
+  f("BillAddrLine1", "128 Dondukov Blvd", "String(50)", "Recommended", "Billing address line 1."),
+  f("ShipAddrCountry", "100", "String(3)", "Optional", "Shipping country code."),
+  f("ShipAddrCity", "", "String(50)", "Optional", "Shipping city."),
+  f("ShipAddrPostCode", "", "String(16)", "Optional", "Shipping ZIP code."),
+  f("Cart logical holder", "Cart", "Logical Record", "Mandatory", "Logical record describing the shopping cart displayed on the IPG payment page."),
+  f("CartItems", "2", "Int", "Mandatory", "Number of item rows in the Cart logical record."),
+  v42SignatureField,
+];
+
+const v42CartFields = [
+  f("Article", "HP ProBook 6360b sticker", "String", "Returned", "Article name in the shopping cart."),
+  f("Quantity", "2", "Int", "Returned", "Number of pieces."),
+  f("Price", "2.34", "Double", "Returned", "Price of a single unit."),
+  f("Amount", "4.68", "Double", "Returned", "Quantity multiplied by price."),
+  f("Currency", "978", "N(3)", "Returned", "Same currency as the purchase amount."),
+];
+
+const v42PurchaseNotifyFields = [
+  f("IPGmethod", "IPGPurchaseNotify", "String", "Returned", "Notification method name."),
+  f("MID", "000000000000123", "AN(15)", "Returned", "Echo from IPGPurchase."),
+  f("Amount", "23.45", "Double", "Returned", "Echo from IPGPurchase."),
+  f("Currency", "978", "N(3)", "Returned", "Echo from IPGPurchase."),
+  f("CustomerIP", "127.0.0.1", "String", "Returned", "Echo from IPGPurchase."),
+  f("OrderID", "DB183FF5-...", "String", "Returned", "Echo from IPGPurchase."),
+  f("Approval", "123456", "String", "Returned", "Issuer approval code."),
+  f("IPG_Trnref", "20250416064112146319", "String", "Returned", "IPG transaction reference for refund or reversal."),
+  f("RequestSTAN", "123456", "N(6)", "Returned", "Unique matching number."),
+  f("RequestDateTime", "2025-04-16 23:59:59", "DateTime", "Returned", "Request date and time."),
+  f("Pan", "532610****0004", "String", "Returned", "First 6 and last 4 digits of PAN."),
+  f("CardType", "VISA", "String", "Returned", "Card brand."),
+  f("ExpdtYYMM", "2112", "N(4)", "Returned", "Card expiry in YYMM format."),
+  f("CardholderName", "Ivan", "String", "Returned", "Cardholder name."),
+  f("Eci", "06", "String(2)", "Returned", "Electronic Commerce Indicator."),
+  f("Token", "D747458899D...FC43D5", "String(64)", "Optional", "Returned if the customer selected Store Card."),
+  f("CustomerIdentifier", "1234", "String", "Optional", "Echoed when sent in the request."),
+  v42SignatureField,
+];
+
+const v42DeclineNotifyFields = [
+  f("IPGmethod", "IPGPurchaseDeclineNotify", "String", "Returned", "Decline notification method name."),
+  f("MID", "000000000000123", "AN(15)", "Returned", "Echo from the request."),
+  f("OrderID", "DB183FF5-...", "String", "Returned", "Echo from the request."),
+  f("Amount", "23.45", "Double", "Returned", "Echo from the request."),
+  f("Currency", "978", "N(3)", "Returned", "Echo from the request."),
+  f("IPG_TrnStatus", "57", "N(3)", "Returned", "Transaction status code. See IPGGetTxnStatus."),
+  f("IPG_TrnStatusMsg", "Rejected by the issuer - Risk assessment", "String", "Returned", "Transaction status message."),
+  v42SignatureField,
+];
+
+const v42StoreCardRequestFields = [
+  f("IPGmethod", "IPGStoreCard", "String", "Mandatory", "Requested method."),
+  f("KeyIndex", "1", "Int", "Mandatory", "Private key index."),
+  f("KeyIndexResp", "1", "Int", "Mandatory", "Response key index."),
+  f("IPGVersion", "4.2", "String", "Mandatory", "Protocol version."),
+  f("Originator", "100", "Int", "Mandatory", "Merchant company identifier."),
+  f("Language", "EN", "A(2)", "Mandatory", "Payment page language."),
+  f("BannerIndex", "1", "Int", "Mandatory", "Payment page banner index."),
+  f("MID", "000000000000123", "AN(15)", "Mandatory", "Virtual terminal identifier."),
+  f("MIDName", "Merchant Web Shop", "String", "Mandatory", "Merchant name shown on the page."),
+  f("OrderID", "DB183FF5-...", "String", "Mandatory", "Merchant request reference."),
+  f("Amount", "23.45", "Double", "Mandatory", "Verification transaction amount from the PDF table."),
+  f("Currency", "978", "N(3)", "Mandatory", "MID currency."),
+  f("CustomerIP", "127.0.0.1", "String", "Mandatory", "Customer IP address."),
+  f("CustomerIdentifier", "1234", "String", "Recommended", "Merchant-side customer reference."),
+  f("Email", "customer@mywebsite.com", "String", "Mandatory", "Cardholder email."),
+  f("URL_OK", "http://site.ext/paymentOK", "String", "Mandatory", "Redirect URL after successful card storage."),
+  f("URL_Cancel", "http://site.ext/paymentNOK", "String", "Mandatory", "Redirect URL when canceled."),
+  f("URL_Notify", "http://site.ext/paymentNotify", "String", "Mandatory", "Endpoint where IPGStoreCardNotify is posted."),
+  f("MobileNumber", "+359811222111", "String", "Mandatory", "Customer mobile number."),
+  v42SignatureField,
+];
+
+const v42StoreCardNotifyFields = [
+  f("IPGmethod", "IPGStoreCardNotify", "String", "Returned", "Notification method name."),
+  f("Token", "D747458899D...FC43D5", "String(64)", "Returned", "Stored card token for subsequent payments."),
+  f("MID", "000000000000123", "AN(15)", "Returned", "Echo from IPGStoreCard."),
+  f("Currency", "978", "N(3)", "Returned", "Echo from IPGStoreCard."),
+  f("CustomerIP", "127.0.0.1", "String", "Returned", "Echo from IPGStoreCard."),
+  f("OrderID", "2DA730C3-...", "String", "Returned", "Echo from IPGStoreCard."),
+  f("CardType", "VISA", "String", "Returned", "Card brand."),
+  f("CardholderName", "Ivan Ivanov", "String", "Returned", "Cardholder name."),
+  f("Approval", "123456", "String", "Returned", "Approval code for the verification transaction."),
+  f("Pan", "532610**0004", "String", "Returned", "Masked PAN."),
+  f("Amount", "23.45", "Double", "Returned", "Echo from request."),
+  f("Eci", "06", "String(2)", "Returned", "Electronic Commerce Indicator."),
+  f("ExpdtYYMM", "2412", "String", "Returned", "Card expiry."),
+  f("CustomerIdentifier", "1234", "String", "Optional", "Echoed when sent in request."),
+  f("IPG_Trnref", "20250416064251147276", "String", "Returned", "IPG transaction reference."),
+  v42SignatureField,
+];
+
+const v42StoredCardRequestFields = [
+  f("IPGmethod", "IPGPurchaseWithStoredCard", "String", "Mandatory", "Requested method."),
+  f("KeyIndex", "1", "Int", "Mandatory", "Private key index."),
+  f("KeyIndexResp", "1", "Int", "Mandatory", "Response key index."),
+  f("IPGVersion", "4.2", "String", "Mandatory", "Protocol version."),
+  f("Originator", "100", "Int", "Mandatory", "Merchant company identifier."),
+  f("MID", "000000000000123", "AN(15)", "Mandatory", "Virtual terminal identifier."),
+  f("OrderID", "46D394B9-...", "String", "Mandatory", "Merchant order or subscription reference. Up to 255 characters."),
+  f("Amount", "23.45", "Double", "Mandatory", "Requested amount."),
+  f("Currency", "978", "N(3)", "Mandatory", "MID currency."),
+  f("Token", "gqGCQBw9KDsoIq...AwmI", "String", "Mandatory", "Stored card token encrypted with the iCard public key using PKCS1 padding."),
+  f("IPG_Trnref", "20250416064251147276", "String", "Mandatory", "Reference to the first or previous transaction."),
+  f("OutputFormat", "json", "String", "Optional", "xml or json. Defaults to xml."),
+  v42SignatureField,
+];
+
+const v42StoredCardResponseFields = [
+  r("method", "IPGPurchaseWithStoredCard", "String", "Response method name."),
+  r("status", "0", "String", "Request status."),
+  r("status_msg", "Success", "String", "Status message."),
+  r("IPG_Trnref", "20250416064251147276", "String", "Returned for successful transactions."),
+  r("Approval", "123456", "String", "Issuer approval code returned for successful transactions."),
+  r("Signature", "Byte[] BASE64", "BASE64", "Response signature."),
+];
+
+const v42ThreeDsStoredFields = [
+  f("IPGmethod", "IPG3DSPurchaseWithStoredCard", "String", "Mandatory", "Requested method."),
+  f("KeyIndex", "1", "Int", "Mandatory", "Private key index."),
+  f("KeyIndexResp", "1", "Int", "Mandatory", "Response key index."),
+  f("IPGVersion", "4.2", "String", "Mandatory", "Protocol version."),
+  f("Language", "EN", "A(2)", "Mandatory", "Payment page language."),
+  f("Originator", "33", "Int", "Mandatory", "Merchant company identifier."),
+  f("BannerIndex", "1", "Int", "Conditional", "Payment page banner index."),
+  f("MID", "000000000123", "AN(15)", "Mandatory", "Virtual terminal identifier."),
+  f("MIDName", "Merchant Web Shop", "String", "Mandatory", "Merchant name shown on the payment page."),
+  f("Amount", "23.45", "Double", "Mandatory", "Requested amount."),
+  f("Currency", "978", "N(3)", "Mandatory", "MID currency."),
+  f("OrderID", "DB183FF5-...", "String", "Mandatory", "Merchant order reference. Up to 255 characters."),
+  f("Token", "gqGCQBw9KDsoIq...AwmI", "String", "Mandatory", "Stored card token encrypted with the iCard public key using PKCS1 padding."),
+  f("VerifyCVC", "1", "N(1)", "Optional", "If 1, customer confirms CVC before payment."),
+  f("URL_OK", "http://site.ext/paymentOK", "String", "Mandatory", "Redirect URL on success."),
+  f("URL_Cancel", "http://site.ext/paymentNOK", "String", "Mandatory", "Redirect URL on unsuccessful transaction."),
+  f("URL_Notify", "http://site.ext/paymentNotify", "String", "Mandatory", "Endpoint where IPG3DSPurchaseWithStoredCardNotify is posted."),
+  f("CustomerIdentifier", "123456789", "String", "Recommended", "Merchant-side customer reference."),
+  f("Email", "name@website.com", "String", "Mandatory", "Cardholder email."),
+  f("MobileNumber", "+359811222111", "String", "Mandatory", "Cardholder mobile number."),
+  v42SignatureField,
+];
+
+const v42RecurringFields = [
+  f("IPGmethod", "IPGFirstRecurring / IPGSubsequentRecurring", "String", "Mandatory", "Recurring method name."),
+  f("KeyIndex", "1", "Int", "Mandatory", "Private key index."),
+  f("KeyIndexResp", "1", "Int", "Mandatory", "Response key index."),
+  f("IPGVersion", "4.2", "String", "Mandatory", "Protocol version."),
+  f("Originator", "33", "Int", "Mandatory", "Merchant company identifier."),
+  f("MID", "000000000000123", "AN(15)", "Mandatory", "Virtual terminal identifier."),
+  f("OrderID", "DB183FF5-...", "String", "Mandatory", "Merchant order or subscription reference. Up to 255 characters."),
+  f("IPG_Trnref", "20250416064251147276", "String", "Mandatory for subsequent", "First recurring transaction reference for subsequent recurring payments."),
+  f("Amount", "23.45", "Double", "Mandatory", "Requested amount."),
+  f("Currency", "978", "N(3)", "Mandatory", "MID currency."),
+  f("CustomerIdentifier", "1234", "String", "Recommended", "Merchant customer reference."),
+  f("Email", "customer@mywebsite.com", "String", "Mandatory", "Cardholder email."),
+  f("OutputFormat", "json", "String", "Optional", "xml or json. Defaults to xml."),
+  v42SignatureField,
+];
+
+const v42BackendCommonFields = [
+  f("IPGmethod", "IPGReversal / IPGRefund / IPGGetTxnStatus", "String", "Mandatory", "Back-office method name."),
+  f("KeyIndex", "1", "Int", "Mandatory", "Private key index."),
+  f("KeyIndexResp", "1", "Int", "Mandatory", "Response key index."),
+  f("IPGVersion", "4.2", "String", "Mandatory", "Protocol version."),
+  f("Originator", "33", "Int", "Mandatory", "Merchant company identifier."),
+  f("MID", "000000000000123", "AN(15)", "Required by method", "Virtual terminal identifier. Required for refund and status."),
+  f("OrderID", "DB183FF5-...", "String", "Required by method", "Merchant reference. Required for refund and status."),
+  f("IPG_Trnref", "20250416064251147276", "String", "Required by method", "Transaction reference for reversal or refund."),
+  f("Amount", "23.45", "Double", "Required by refund", "Refund amount."),
+  f("Currency", "978", "N(3)", "Required by refund", "Refund currency."),
+  f("Email", "customer@mywebsite.com", "String", "Required by refund", "Cardholder email."),
+  f("OutputFormat", "json", "String", "Optional / Mandatory", "xml or json. Mandatory for reversal in the PDF table."),
+  v42SignatureField,
+];
+
+const v42BackendResponseFields = [
+  r("method", "IPGRefund", "String", "Response method name."),
+  r("trnref", "20250416064251147276", "String", "Transaction ID."),
+  r("amount", "1", "Double", "Echo from refund when applicable."),
+  r("currency", "978", "N(3)", "Echo from refund when applicable."),
+  r("status", "0", "String", "Request status."),
+  r("status_msg", "Success", "String", "Status message."),
+  r("IPG_TrnStatus", "100", "Int", "Transaction status code for IPGGetTxnStatus."),
+  r("IPG_TrnStatusMsg", "Transaction completed successful", "String", "Transaction status message."),
+  r("Signature", "Byte[] BASE64", "BASE64", "Response signature."),
+];
+
+const v42StatusTable = table(
+  "IPGGetTxnStatus Reference Statuses",
+  ["Status", "Meaning"],
+  [
+    ["100", "Transaction completed successful. Success only when IPG received OK from URL_Notify."],
+    ["1-9", "Pending rejection categories such as technical issue, invalid request, issuer rejection, risk, invalid card, invalid amount, or failed 3DS."],
+    ["10-18", "Final rejection categories such as technical issue, invalid request, risk assessment, issuer rejection, insufficient funds, invalid card, invalid amount, or failed 3DS."],
+    ["19", "User input timeout on payment page or issuer 3DS page."],
+    ["20", "Pending: no customer input or no 3DS response."],
+    ["21", "Canceled by the customer with no 3DS response."],
+    ["97", "Reversed because IPG did not receive OK from URL_Notify or received a response other than OK."],
+    ["98", "Not completed, missing capture. Intermediate status before Success or Reversed."],
+    ["99", "Not found."],
+  ]
+);
+
+const v42PaymentTokenFields = [
+  f("IPGmethod", "IPGPaymentToken", "String", "Mandatory", "Payment token request method."),
+  f("ModalType", "IPGPurchase", "String", "Mandatory", "Modal method. Possible values: IPGPurchase, IPGFirstRecurring, IPGStoreCard, IPG3DSPurchaseWithStoredCard."),
+  f("OutputFormat", "json", "String", "Optional", "xml or json. Defaults to xml."),
+  f("URL_OK", "", "String", "Not required", "Not required with IPGPaymentTokenRequest."),
+  f("URL_Cancel", "", "String", "Not required", "Not required with IPGPaymentTokenRequest."),
+  f("Token / Cardtoken", "D747458899D...", "String", "Conditional", "For modal IPG3DSPurchaseWithStoredCard, the saved-card parameter is Cardtoken instead of Token."),
+  v42SignatureField,
+];
+
+const v42Content = {
+  ...ipgContent,
+  "ipg-overview": {
+    title: "IPG API 4.2",
+    subtitle: "Overview & Architecture",
+    description:
+      "Protocol 4.2 reference based on IPG_API_v4.2_rev.36_20250416, keeping the same explorer structure while using the 4.2 method set.",
+    facts: ["Protocol 4.2", "HTTPS", "POST notifications", "Token stored-card flows"],
+    body: [
+      "The 4.2 flow starts from the merchant checkout page. The merchant posts an IPGPurchase request, redirects the browser to IPG, IPG handles card entry, 3DS, and scheme processing, then posts the result to the merchant and redirects the customer to the checkout result page.",
+      "This version uses method-based IPG-to-Merchant notifications. For URL_Notify calls, the merchant must return HTTP 200 and body OK.",
+      "The 4.2 PDF does not use the same modern wallet-tokenized and embedded-checkout method set as 4.5. Those differences are kept in the right-side differences column and the version summary.",
+    ],
+    tables: [v42TransmissionTable, v42MethodInventoryTable],
+    differences: v42Differences,
+  },
+  "ipg-http-post": {
+    title: "HTTP POST",
+    subtitle: "General",
+    description:
+      "Data transfer between Merchant and IPG 4.2 is made by HTTP POST.",
+    facts: ["Sandbox endpoint", "Production endpoint", "UTF-8", "application/x-www-form-urlencoded"],
+    body: [
+      "All parameters for requests are in the body in [parameter=value] form.",
+      "The separator between tokens is [&]. The body is URL encoded and the character encoding is UTF-8.",
+      "Sandbox endpoint: https://dev-ipg.icards.eu/sandbox/",
+      "Production endpoint: https://ipg.icard.com/",
+    ],
+    request: `POST /sandbox/ HTTP/2
+Host: dev-ipg.icards.eu
+Content-Type: application/x-www-form-urlencoded
+
+IPGmethod=IPGPurchase&KeyIndex=1&KeyIndexResp=1&IPGVersion=4.2&Language=en&Originator=33...`,
+  },
+  "ipg-data-types": {
+    title: "Data Type Formats",
+    subtitle: "General",
+    description: "IPG 4.2 uses the data type notation from the protocol 4.2 PDF.",
+    tables: [v42DataTypesTable],
+  },
+  "ipg-security": {
+    title: "Signatures Overview",
+    subtitle: "Security & Signatures",
+    description:
+      "In every IPG 4.2 message, a signature is supplied as a signed hash of all property values sent in the request, without Signature.",
+    facts: ["RSA keys", "SHA-256", "KeyIndex", "Signature last"],
+    body: [
+      "Both iCard and the merchant generate RSA public/private key pairs and exchange public keys.",
+      "Each party signs messages with its own private key. The opposite side verifies the signature with the corresponding public key.",
+      "KeyIndex identifies the private key used to sign the request, and KeyIndexResp identifies the key used to build the response signature.",
+      "The Signature parameter is always appended at the end of the POST string and is not included when calculating the hash.",
+    ],
+    resources: [resources.productionSignatureGenerator],
+    differences: [v42Differences[0]],
+  },
+  "ipg-signature-generation": {
+    title: "Signature Generation",
+    subtitle: "Security & Signatures",
+    description:
+      "IPG 4.2 signature generation concatenates POST values, Base64 encodes the concatenated string, then signs it with SHA-256.",
+    facts: ["IPG >= 4.2", "Concatenate values", "Base64 encode", "Sign with SHA-256"],
+    body: [
+      "Use all POST request values except Signature. Keep the values in the POST data order used by the request builder.",
+      "Concatenate the values without separators, Base64 encode the concatenated UTF-8 string, sign the Base64 string with SHA-256 using the merchant private key, then Base64 encode the binary signature.",
+    ],
+    resources: [resources.productionSignatureGenerator],
+    examplesTitle: "Signing Steps",
+    examples: [
+      {
+        title: "1. Start From POST Data",
+        description: "Use request values without Signature.",
+        code: `IPGmethod => IPGPurchase
+KeyIndex => 1
+KeyIndexResp => 1
+IPGVersion => 4.2
+MIDName => MerchStore`,
+      },
+      {
+        title: "2. Concatenate Values",
+        description: "Join values directly, without field names or separators.",
+        code: `IPGPurchase114.2MerchStore`,
+      },
+      {
+        title: "3. Base64 Encode",
+        description: "Base64 encode the concatenated UTF-8 string.",
+        code: `SVBHUHVyY2hhc2UxMTQuMk1lcmNoU3RvcmU=`,
+      },
+      {
+        title: "4. Sign",
+        description: "Sign the Base64 string with SHA-256 and the merchant private key.",
+        code: `PHP
+$privateKey = openssl_get_privatekey($privateKeyString);
+openssl_sign($base64Encoded, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+
+C#
+var sha = SHA256.Create();
+var signature = key.SignHash(
+  sha.ComputeHash(Encoding.UTF8.GetBytes(base64Encoded)),
+  HashAlgorithmName.SHA256,
+  RSASignaturePadding.Pkcs1
+);`,
+      },
+      {
+        title: "5. Encode Signature",
+        description: "Base64 encode the binary signature and append it as Signature.",
+        code: `$base64Signature = base64_encode($signature);
+Signature=<base64Signature>`,
+      },
+    ],
+    differences: [v42Differences[0]],
+  },
+  "ipg-signature-verification": {
+    title: "Signature Verification",
+    subtitle: "Security & Signatures",
+    description:
+      "IPG 4.2 verification repeats the same concatenation and Base64 encoding, then verifies the received Signature with the public key.",
+    facts: ["Extract Signature", "Remove Signature", "Rebuild Base64 string", "Verify with public key"],
+    body: [
+      "Extract Signature from POST data, remove it from the data set, concatenate the remaining values as in signature generation, and Base64 encode the concatenated value.",
+      "Use the iCard public key to verify the decoded Signature against the rebuilt Base64 string with SHA-256.",
+    ],
+    request: `PHP
+$publicKey = openssl_get_publickey($publicKeyString);
+$result = openssl_verify($base64Encoded, base64_decode($signature), $publicKey, OPENSSL_ALGO_SHA256);`,
+    differences: [v42Differences[0]],
+  },
+  "ipg-signing-example": {
+    title: "Step-by-Step Signing Example",
+    subtitle: "Security & Signatures",
+    description:
+      "Concrete IPG 4.2 signing flow from POST values to final Base64 signature.",
+    body: [
+      "Unlike 4.5, IPG 4.2 does not lowercase keys or sort key-value paths. It concatenates request values, Base64 encodes that string, and signs the encoded string.",
+    ],
+    resources: [resources.productionSignatureGenerator],
+    examplesTitle: "Signing Steps",
+    examples: [
+      {
+        title: "1. POST Data",
+        description: "Start from request values without Signature.",
+        code: `IPGmethod => IPGPurchase
+KeyIndex => 1
+KeyIndexResp => 1
+IPGVersion => 4.2
+MIDName => MerchStore`,
+      },
+      {
+        title: "2. Concatenate",
+        description: "Join values directly.",
+        code: `IPGPurchase114.2MerchStore`,
+      },
+      {
+        title: "3. Base64",
+        description: "Encode the concatenated value.",
+        code: `SVBHUHVyY2hhc2UxMTQuMk1lcmNoU3RvcmU=`,
+      },
+      {
+        title: "4. Generate Signature",
+        description: "Sign the Base64 string with SHA-256.",
+        code: `openssl_sign($base64Encoded, $signature, $privateKey, OPENSSL_ALGO_SHA256);`,
+      },
+      {
+        title: "5. Final Signature",
+        description: "Base64 encode the binary signature and send it last.",
+        code: `Signature=<base64-encoded-signature>`,
+      },
+    ],
+    differences: [v42Differences[0]],
+  },
+  "ipg-callbacks": {
+    title: "IPG 4.2 Notifications",
+    subtitle: "Callbacks",
+    description:
+      "IPG 4.2 uses method-based POST notifications from IPG to Merchant instead of the 4.5 JSON callback object.",
+    facts: ["URL_Notify", "HTTP 200", "Body OK", "Method-based posts"],
+    body: [
+      "The merchant supplies URL_Notify in the initiating request. IPG posts methods such as IPGPurchaseNotify, IPGPurchaseDeclineNotify, or IPGPurchaseRollback to that URL.",
+      "After a successful OK response from the merchant, IPG redirects the customer browser to URL_OK and sends the corresponding OK redirect method.",
+    ],
+    tables: [v42NotificationTypesTable],
+    differences: [v42Differences[1], v42Differences[5]],
+  },
+  "ipg-callback-retries": {
+    title: "Notification Acknowledgement",
+    subtitle: "Callbacks",
+    description:
+      "IPG 4.2 requires a strict acknowledgement response for IPG-to-Merchant notification methods.",
+    facts: ["HTTP 200 OK", "Body must be OK", "Rollback on failed acknowledgement", "URL_Notify"],
+    body: [
+      "Upon an HTTP request, the responding party must return HTTP status 200 OK.",
+      "The response body must contain only the string OK. Every other body is considered an error status.",
+      "If IPG does not receive OK for IPGPurchaseNotify, IPG can send IPGPurchaseRollback and the merchant should mark the order as not paid.",
+    ],
+    tables: [
+      table("4.2 Notification Response Rules", ["Condition", "IPG behavior"], [
+        ["HTTP 200 with body OK", "Notification is accepted and the customer can be redirected to the corresponding result URL."],
+        ["Any other HTTP status or body", "Treated as communication error, call error, server error, or system malfunction."],
+        ["No OK for successful purchase notification", "IPG can post IPGPurchaseRollback to URL_Notify."],
+      ]),
+    ],
+    differences: [v42Differences[1]],
+  },
+  "ipg-callback-troubleshooting": {
+    title: "Notification Troubleshooting",
+    subtitle: "Callbacks",
+    description:
+      "Use this page when IPG 4.2 notification methods are not acknowledged or merchant order state does not match IPG status.",
+    facts: ["Check URL_Notify", "Return exact OK", "Verify Signature", "Use IPGGetTxnStatus"],
+    body: [
+      "Confirm that URL_Notify is publicly reachable and matches the value sent in the initiating request.",
+      "Confirm that the endpoint returns HTTP 200 and the exact body OK, with no additional response content.",
+      "Verify the Signature on incoming methods and use IPGGetTxnStatus as a reference check, not as the primary payment approval signal.",
+    ],
+    tables: [v42StatusTable],
+    differences: [v42Differences[1]],
+  },
+  "ipg-callback-payment": {
+    title: "Purchase Notifications",
+    subtitle: "Callbacks",
+    description:
+      "IPGPurchase uses incoming, success, cancel, rollback, and decline notification methods.",
+    fieldSections: [
+      { title: "IPGPurchaseNotify Parameters", fields: v42PurchaseNotifyFields },
+      { title: "IPGPurchaseDeclineNotify Parameters", fields: v42DeclineNotifyFields },
+    ],
+    differences: [v42Differences[1]],
+  },
+  "ipg-callback-carddata": {
+    title: "Store Card Notifications",
+    subtitle: "Callbacks",
+    description:
+      "IPGStoreCard returns Token data through method-based notifications and redirects.",
+    fieldSections: [{ title: "IPGStoreCardNotify Parameters", fields: v42StoreCardNotifyFields }],
+    differences: [v42Differences[2]],
+  },
+  "ipg-callback-operation": {
+    title: "3DS Stored Card Notifications",
+    subtitle: "Callbacks",
+    description:
+      "IPG3DSPurchaseWithStoredCard posts stored-card 3DS notification methods to URL_Notify and redirects to URL_OK or URL_Cancel.",
+    fieldSections: [{ title: "IPG3DSPurchaseWithStoredCardNotify Parameters", fields: v42PurchaseNotifyFields }],
+    differences: [v42Differences[1], v42Differences[2]],
+  },
+  "ipg-callback-examples": {
+    title: "Common Notification Examples",
+    subtitle: "Callbacks",
+    description:
+      "Compact IPG 4.2 examples for the most important notification acknowledgement cases.",
+    body: [
+      "Every IPG-to-Merchant notification must be signature-verified by the merchant. For URL_Notify calls, the merchant confirms receipt by returning HTTP 200 with body OK.",
+    ],
+    examplesTitle: "Notification Examples",
+    examples: [
+      {
+        title: "Successful Purchase Notify",
+        description: "Posted to URL_Notify before the browser is redirected to URL_OK.",
+        code: `IPGmethod=IPGPurchaseNotify
+MID=000000000000123
+Amount=23.45
+Currency=978
+OrderID=DB183FF5-8AF8-48D7-8FCC-86C04D95B0B6
+Approval=123456
+IPG_Trnref=20250416064112146319
+Signature=<base64-signature>`,
+      },
+      {
+        title: "Merchant Acknowledgement",
+        description: "The response body must contain only OK.",
+        code: `HTTP/1.1 200 OK
+
+OK`,
+      },
+      {
+        title: "Declined Purchase Notify",
+        description: "Posted to URL_Notify when payment is declined.",
+        code: `IPGmethod=IPGPurchaseDeclineNotify
+MID=000000000000123
+OrderID=DB183FF5-8AF8-48D7-8FCC-86C04D95B0B6
+Amount=23.45
+Currency=978
+IPG_TrnStatus=57
+IPG_TrnStatusMsg=Rejected by the issuer - Risk assessment
+Signature=<base64-signature>`,
+      },
+      {
+        title: "Rollback",
+        description: "Posted when IPG did not receive OK for a previous successful authorization notification.",
+        code: `IPGmethod=IPGPurchaseRollback
+MID=000000000000123
+Amount=23.45
+Currency=978
+OrderID=DB183FF5-8AF8-48D7-8FCC-86C04D95B0B6
+Signature=<base64-signature>`,
+      },
+    ],
+    differences: [v42Differences[1]],
+  },
+  "ipg-redirect-overview": {
+    title: "Redirect Checkout",
+    subtitle: "Implementation Types",
+    description:
+      "IPG 4.2 redirect checkout sends the customer to the IPG payment page and uses URL_Notify plus URL_OK / URL_Cancel result redirects.",
+    facts: ["IPGPurchase", "URL_Notify", "URL_OK", "URL_Cancel"],
+    body: [
+      "The merchant web server initiates payment through IPG and redirects the customer browser to the IPG payment page.",
+      "IPG handles card data collection, 3DS processing, and financial transaction messaging.",
+      "The merchant should treat URL_Notify plus OK acknowledgement as the reliable backend confirmation path.",
+    ],
+    tables: [v42TransmissionTable],
+    differences: [v42Differences[1], v42Differences[5]],
+  },
+  "ipg-modal-overview": {
+    title: "IPG Payment Modal",
+    subtitle: "Implementation Types",
+    description:
+      "IPG 4.2 Payment Modal lets customers make payments without leaving the merchant web page.",
+    facts: ["IPGPaymentTokenRequest", "payment-modal.js", "classic or dark theme", "URL_Notify result"],
+    body: [
+      "The merchant first sends a back-end Payment Token Request. The response token is then used to load payment-modal.js on the merchant page.",
+      "The wrapper element must have id=\"ipg\". The script URL uses _DOMAIN_, _TOKEN_, and _THEME_ placeholders.",
+      "After successful payment, the merchant receives an asynchronous request on URL_Notify with the details supplied in the Payment Token request.",
+    ],
+    request: `<div id="ipg"></div>
+<script>
+function loadModal() {
+  const src = _DOMAIN_ + "js/payment-modal.js?token=" + _TOKEN_ + "&theme=" + _THEME_;
+  const script = document.createElement("script");
+  script.src = src;
+  script.id = "ipg-io-js";
+  script.async = "async";
+  document.querySelector("body").appendChild(script);
+}
+</script>`,
+    differences: [v42Differences[6]],
+  },
+  "ipg-purchase": {
+    title: "IPGPurchase",
+    subtitle: "API Methods",
+    description:
+      "Initiates the 4.2 checkout process and redirects the cardholder to the IPG payment page.",
+    facts: ["Protocol 4.2", "CartItems mandatory", "URL_Notify", "Token may be returned"],
+    fieldSections: [
+      { title: "Request Parameters", fields: v42PurchaseRequestFields },
+      { title: "Cart Logical Record", fields: v42CartFields, showSample: true },
+    ],
+    notes: [
+      "The Store Card checkbox can be displayed depending on the merchant payment model. If selected, Token is returned in IPGPurchaseNotify.",
+      "OrderID can be up to 255 characters in the 4.2 PDF.",
+    ],
+    request: `IPGmethod=IPGPurchase
+KeyIndex=1
+KeyIndexResp=1
+IPGVersion=4.2
+Originator=100
+Language=EN
+BannerIndex=1
+MID=000000000000123
+MIDName=Merchant Web Shop
+Amount=23.45
+Currency=978
+OrderID=DB183FF5-8AF8-48D7-8FCC-86C04D95B0B6
+URL_OK=http://site.ext/paymentOK
+URL_Cancel=http://site.ext/paymentNOK
+URL_Notify=http://site.ext/paymentNotify
+CartItems=2
+Signature=<base64-signature>`,
+    differences: [v42Differences[3], v42Differences[5]],
+  },
+  "ipg-v42-store-card": {
+    title: "IPGStoreCard",
+    subtitle: "API Methods",
+    description:
+      "Stores a card for subsequent use and returns a Token through store-card notification methods.",
+    facts: ["Token", "Zero-amount verification", "URL_Notify", "URL_OK / URL_Cancel"],
+    fieldSections: [{ title: "Request Parameters", fields: v42StoreCardRequestFields }],
+    tables: [v42NotificationTypesTable],
+    differences: [v42Differences[2]],
+  },
+  "ipg-v42-get-stored-card-data": {
+    title: "IPGGetStoredCardData",
+    subtitle: "API Methods",
+    description:
+      "Retrieves stored card data by reference to a previously executed Store Card method.",
+    facts: ["Back-end", "Token", "Encrypted token", "XML or JSON"],
+    fieldSections: [{ title: "Request Parameters", fields: [
+      f("IPGmethod", "IPGGetStoredCardData", "String", "Mandatory", "Requested method."),
+      f("KeyIndex", "1", "Int", "Mandatory", "Private key index."),
+      f("KeyIndexResp", "1", "Int", "Mandatory", "Response key index."),
+      f("Originator", "100", "Int", "Mandatory", "Merchant company identifier."),
+      f("IPGVersion", "4.2", "String", "Mandatory", "Protocol version."),
+      f("OrderID", "46D394B9-...", "String", "Mandatory", "Merchant order or subscription reference."),
+      f("Token", "gqGCQBw9KDsoIq...AwmI", "String", "Mandatory", "Token encrypted with the iCard public key using PKCS1 padding."),
+      f("OutputFormat", "xml", "String", "Optional", "xml or json. Defaults to xml."),
+      v42SignatureField,
+    ] }],
+    differences: [v42Differences[2]],
+  },
+  "ipg-v42-purchase-with-stored-card": {
+    title: "IPGPurchaseWithStoredCard",
+    subtitle: "API Methods",
+    description:
+      "Back-end purchase with a previously stored card token.",
+    facts: ["Back-end", "Encrypted Token", "IPG_Trnref", "XML or JSON response"],
+    fieldSections: [
+      { title: "Request Parameters", fields: v42StoredCardRequestFields },
+      { title: "Response Parameters", fields: v42StoredCardResponseFields },
+    ],
+    differences: [v42Differences[2]],
+  },
+  "ipg-3ds-stored": {
+    title: "IPG3DSPurchaseWithStoredCard",
+    subtitle: "API Methods",
+    description:
+      "Processes a purchase with a stored card and 3DS verification in IPG 4.2.",
+    facts: ["Stored Token", "3DS verification", "VerifyCVC optional", "URL_Notify"],
+    fieldSections: [{ title: "Request Parameters", fields: v42ThreeDsStoredFields }],
+    tables: [v42NotificationTypesTable],
+    differences: [v42Differences[2], v42Differences[5]],
+  },
+  "ipg-v42-first-recurring": {
+    title: "IPGFirstRecurring",
+    subtitle: "API Methods",
+    description:
+      "Starts a recurring subscription agreement with a customer-initiated card transaction.",
+    facts: ["Recurring", "Front-end", "URL_Notify", "255-character OrderID"],
+    fieldSections: [{ title: "Request Parameters", fields: v42RecurringFields }],
+    notes: ["Possible IPG-to-Merchant methods mirror the IPGPurchase notification set."],
+  },
+  "ipg-v42-subsequent-recurring": {
+    title: "IPGSubsequentRecurring",
+    subtitle: "API Methods",
+    description:
+      "Processes a subsequent recurring back-end transaction after the initial agreement.",
+    facts: ["Recurring", "Back-end", "IPG_Trnref", "XML or JSON response"],
+    fieldSections: [
+      { title: "Request Parameters", fields: v42RecurringFields },
+      { title: "Response Parameters", fields: [
+        r("method", "IPGSubsequentRecurring", "String", "Response method name."),
+        r("trnreforiginal", "20240329094900301693", "String", "Original transaction ID."),
+        r("trnref", "20240516094901407362", "String", "Transaction ID."),
+        r("status", "0", "String", "Request status."),
+        r("status_msg", "Success", "String", "Status message."),
+        r("Signature", "Byte[] BASE64", "BASE64", "Response signature."),
+      ] },
+    ],
+  },
+  "ipg-payment-token-purchase": {
+    title: "IPGPaymentTokenRequest",
+    subtitle: "API Methods",
+    description:
+      "Back-end synchronous request that returns the token used for IPG Payment Modal generation.",
+    facts: ["Payment Modal", "ModalType", "Token response", "payment-modal.js"],
+    fieldSections: [{ title: "Request Parameters", fields: v42PaymentTokenFields }],
+    differences: [v42Differences[6]],
+  },
+  "ipg-reversal": {
+    title: "IPGReversal",
+    subtitle: "Backend Methods",
+    description:
+      "Initiates a reversal of a previously executed payment. In 4.2 this method is mandatory for all merchant integrations.",
+    facts: ["Back-office", "Mandatory", "IPG_Trnref", "XML or JSON response"],
+    fieldSections: [
+      { title: "Request Parameters", fields: v42BackendCommonFields },
+      { title: "Response Parameters", fields: v42BackendResponseFields },
+    ],
+    request: `IPGmethod=IPGReversal
+KeyIndex=1
+KeyIndexResp=1
+IPGVersion=4.2
+Originator=33
+IPG_Trnref=20250416064251147276
+OutputFormat=json
+Signature=<base64-signature>`,
+  },
+  "ipg-refund": {
+    title: "IPGRefund",
+    subtitle: "Backend Methods",
+    description:
+      "Initiates a refund for a previously executed payment.",
+    facts: ["Back-office", "IPG_Trnref", "Email mandatory", "XML or JSON response"],
+    fieldSections: [
+      { title: "Request Parameters", fields: v42BackendCommonFields },
+      { title: "Response Parameters", fields: v42BackendResponseFields },
+    ],
+  },
+  "ipg-get-status": {
+    title: "IPGGetTxnStatus",
+    subtitle: "Backend Methods",
+    description:
+      "Returns status and parameters for a previously executed payment. It is a reference check, not the payment approval signal.",
+    facts: ["Reference only", "OrderID", "Status 100 success", "Status 97 reversed"],
+    fieldSections: [
+      { title: "Request Parameters", fields: v42BackendCommonFields },
+      { title: "Response Parameters", fields: v42BackendResponseFields },
+    ],
+    tables: [v42StatusTable],
+    notes: [
+      "A transaction is approved only when the card response is successful and IPG sends URL_Notify and receives OK from the merchant.",
+    ],
+  },
+  "ipg-business-models": {
+    title: "IPG 4.2 Compatibility Notes",
+    subtitle: "Business Models",
+    description:
+      "The 4.2 source PDF is organized around e-commerce payment methods rather than the later focused business-model screens.",
+    facts: ["Shared 4.2 reference", "E-commerce source document", "Older method set", "Use version differences column"],
+    body: [
+      "For protocol 4.2, the website keeps the same high-level explorer structure but shows the method set from the 4.2 PDF.",
+      "Where a 4.5 business-model screen would normally expose wallet-tokenized or embedded checkout methods, the 4.2 version instead documents redirect checkout, store-card, recurring, backend, and Payment Modal flows.",
+    ],
+    tables: [v42CompatibilityTable],
+    differences: v42Differences,
+  },
+  "ipg-protocol-changes": {
+    title: "IPG 4.2 to 4.5 Differences",
+    subtitle: "Business Models",
+    description:
+      "Dedicated comparison page for teams moving from protocol 4.2 to the current 4.5 structure.",
+    tables: [v42CompatibilityTable],
+    differences: v42Differences,
+  },
+};
+
+const v42Menu = [
+  {
+    title: "General",
+    items: [
+      { id: "ipg-overview", label: "Overview & Architecture", type: "overview" },
+      { id: "ipg-integration-steps", label: "Integration steps", type: "guide" },
+      { id: "ipg-http-post", label: "HTTP POST", type: "guide" },
+      { id: "ipg-data-types", label: "Data type formats", type: "schema" },
+      { id: "ipg-security", label: "Security & signatures", type: "guide" },
+      { id: "ipg-signature-generation", label: "Signature generation", type: "guide" },
+      { id: "ipg-signature-verification", label: "Signature verification", type: "guide" },
+      { id: "ipg-signing-example", label: "Step-by-step signing example", type: "guide" },
+    ],
+  },
+  {
+    title: "Callbacks",
+    items: [
+      { id: "ipg-callbacks", label: "Notifications overview", type: "guide" },
+      { id: "ipg-callback-retries", label: "Acknowledgement & rollback", type: "guide" },
+      { id: "ipg-callback-troubleshooting", label: "Troubleshooting", type: "guide" },
+      { id: "ipg-callback-payment", label: "Purchase notifications", type: "schema" },
+      { id: "ipg-callback-carddata", label: "Store card notifications", type: "schema" },
+      { id: "ipg-callback-operation", label: "3DS stored notifications", type: "schema" },
+      { id: "ipg-callback-examples", label: "Common notification examples", type: "guide" },
+    ],
+  },
+  {
+    title: "Implementation Types",
+    items: [
+      { id: "ipg-redirect-overview", label: "Redirect checkout", type: "guide" },
+      { id: "ipg-modal-overview", label: "Payment Modal", type: "guide" },
+    ],
+  },
+  {
+    title: "API Methods",
+    items: [
+      { id: "ipg-purchase", label: "IPGPurchase", type: "post" },
+      { id: "ipg-v42-store-card", label: "IPGStoreCard", type: "post" },
+      { id: "ipg-v42-get-stored-card-data", label: "IPGGetStoredCardData", type: "post" },
+      { id: "ipg-v42-purchase-with-stored-card", label: "IPGPurchaseWithStoredCard", type: "post" },
+      { id: "ipg-3ds-stored", label: "IPG3DSPurchaseWithStoredCard", type: "post" },
+      { id: "ipg-v42-first-recurring", label: "IPGFirstRecurring", type: "post" },
+      { id: "ipg-v42-subsequent-recurring", label: "IPGSubsequentRecurring", type: "post" },
+      { id: "ipg-payment-token-purchase", label: "IPGPaymentTokenRequest", type: "post" },
+    ],
+  },
+  {
+    title: "Backend Methods",
+    items: [
+      { id: "ipg-reversal", label: "IPGReversal", type: "post" },
+      { id: "ipg-refund", label: "IPGRefund", type: "post" },
+      { id: "ipg-get-status", label: "IPGGetTxnStatus", type: "post" },
+    ],
+  },
+  {
+    title: "Business Models",
+    items: [
+      { id: "ipg-business-models", label: "4.2 compatibility notes", type: "schema" },
+      { id: "ipg-protocol-changes", label: "4.2 to 4.5 differences", type: "schema" },
+    ],
+  },
+];
 
 const sharedGeneralItems = [
   { id: "ipg-integration-steps", label: "Integration steps", type: "guide" },
@@ -2071,7 +2995,7 @@ const modelBusinessModelsGroup = (functionScopeId) => ({
     { id: "ipg-feature-matrix", label: "Feature matrix", type: "schema" },
     { id: "ipg-payment-availability", label: "Payment method availability", type: "schema" },
     { id: "ipg-key-field-differences", label: "Key field differences", type: "schema" },
-    { id: "ipg-protocol-changes", label: "4.3 to 4.5 changes", type: "schema" },
+    { id: "ipg-protocol-changes", label: "4.2 to 4.5 changes", type: "schema" },
   ],
 });
 
@@ -2489,8 +3413,7 @@ export const ipgBusinessModelDocuments = {
     defaultVersion: "4.5",
     defaultSection: "ipg-overview",
     versions: {
-      "4.2": versionedReference(ipgMenu, ipgContent, ipgVersionDocuments["4.2"].summary),
-      "4.3": versionedReference(ipgMenu, ipgContent, ipgVersionDocuments["4.3"].summary),
+      "4.2": versionedReference(v42Menu, v42Content, ipgVersionDocuments["4.2"].summary),
       "4.5": versionedReference(ipgMenu, ipgContent, ipgVersionDocuments["4.5"].summary),
     },
   },
@@ -2501,10 +3424,10 @@ export const ipgBusinessModelDocuments = {
     defaultSection: "ipg-gambling-overview",
     summaries: {
       "4.2": scopedVersionSummary("Gambling", "4.2", ["BM Gambling"]),
-      "4.3": scopedVersionSummary("Gambling", "4.3", ["BM Gambling"]),
       "4.5": gamblingVersion45Summary,
     },
     versions: {
+      "4.2": versionedReference(v42Menu, v42Content, scopedVersionSummary("Gambling", "4.2", ["BM Gambling"])),
       "4.5": versionedReference(gamblingMenu, gamblingContent, gamblingVersion45Summary),
     },
   },
@@ -2515,10 +3438,14 @@ export const ipgBusinessModelDocuments = {
     defaultSection: "ipg-financial-overview",
     summaries: {
       "4.2": scopedVersionSummary("Financial Institution", "4.2", ["BM Financial Institution"]),
-      "4.3": scopedVersionSummary("Financial Institution", "4.3", ["BM Financial Institution"]),
       "4.5": scopedVersionSummary("Financial Institution", "4.5", ["BM Financial Institution"]),
     },
     versions: {
+      "4.2": versionedReference(
+        v42Menu,
+        v42Content,
+        scopedVersionSummary("Financial Institution", "4.2", ["BM Financial Institution"])
+      ),
       "4.5": versionedReference(
         financialInstitutionMenu,
         financialInstitutionContent,
@@ -2533,10 +3460,10 @@ export const ipgBusinessModelDocuments = {
     defaultSection: "ipg-ecommerce-overview",
     summaries: {
       "4.2": scopedVersionSummary("ECommerce", "4.2", ["BM ECommerce"]),
-      "4.3": scopedVersionSummary("ECommerce", "4.3", ["BM ECommerce"]),
       "4.5": scopedVersionSummary("ECommerce", "4.5", ["BM ECommerce"]),
     },
     versions: {
+      "4.2": versionedReference(v42Menu, v42Content, scopedVersionSummary("ECommerce", "4.2", ["BM ECommerce"])),
       "4.5": versionedReference(
         ecommerceMenu,
         ecommerceContent,
