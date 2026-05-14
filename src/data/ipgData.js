@@ -2927,6 +2927,276 @@ const v42Menu = [
   },
 ];
 
+const v42GeneralItems = [
+  { id: "ipg-integration-steps", label: "Integration steps", type: "guide" },
+  { id: "ipg-http-post", label: "HTTP POST", type: "guide" },
+  { id: "ipg-data-types", label: "Data type formats", type: "schema" },
+  { id: "ipg-security", label: "Security & signatures", type: "guide" },
+  { id: "ipg-signature-generation", label: "Signature generation", type: "guide" },
+  { id: "ipg-signature-verification", label: "Signature verification", type: "guide" },
+  { id: "ipg-signing-example", label: "Step-by-step signing example", type: "guide" },
+];
+
+const v42ModelGeneralGroup = (overviewId) => ({
+  title: "General",
+  items: [
+    { id: overviewId, label: "Overview & Architecture", type: "overview" },
+    ...v42GeneralItems,
+  ],
+});
+
+const v42CallbackDocumentationGroup = {
+  title: "Callbacks",
+  items: [
+    { id: "ipg-callbacks", label: "Notifications overview", type: "guide" },
+    { id: "ipg-callback-retries", label: "Acknowledgement & rollback", type: "guide" },
+    { id: "ipg-callback-troubleshooting", label: "Troubleshooting", type: "guide" },
+    { id: "ipg-callback-payment", label: "Purchase notifications", type: "schema" },
+    { id: "ipg-callback-carddata", label: "Store card notifications", type: "schema" },
+    { id: "ipg-callback-operation", label: "3DS stored notifications", type: "schema" },
+    { id: "ipg-callback-examples", label: "Common notification examples", type: "guide" },
+  ],
+};
+
+const v42ImplementationTypesGroup = {
+  title: "Implementation Types",
+  items: [
+    { id: "ipg-redirect-overview", label: "Redirect checkout", type: "guide" },
+    { id: "ipg-modal-overview", label: "Payment Modal", type: "guide" },
+  ],
+};
+
+const v42BusinessModelsGroup = (functionScopeId) => ({
+  title: "Business Models",
+  items: [
+    { id: functionScopeId, label: "Function scope", type: "schema" },
+    { id: "ipg-business-models", label: "4.2 compatibility notes", type: "schema" },
+    { id: "ipg-protocol-changes", label: "4.2 to 4.5 differences", type: "schema" },
+  ],
+});
+
+const v42GamblingFunctionScopeTable = table(
+  "Gambling Function Scope - IPG 4.2",
+  ["Function", "Use in Gambling 4.2", "Notes"],
+  [
+    ["IPGPurchase", "Card deposit / redirect checkout.", "Use URL_Notify and exact OK acknowledgement for backend confirmation."],
+    ["IPGStoreCard", "Optional stored-card enrollment.", "Returns Token through store-card notifications."],
+    ["IPGGetStoredCardData", "Optional stored-card data lookup.", "Uses encrypted Token from a previous store-card flow."],
+    ["IPGPurchaseWithStoredCard", "Optional merchant-initiated stored-card payment.", "Back-end flow with encrypted Token and IPG_Trnref."],
+    ["IPG3DSPurchaseWithStoredCard", "Optional customer-facing stored-card payment with 3DS.", "Uses URL_OK, URL_Cancel, and URL_Notify."],
+    ["IPGPaymentTokenRequest", "Optional Payment Modal presentation.", "The 4.2 PDF documents Payment Modal, not IPGEmbeddedPayment."],
+    ["IPGOCT", "Gaming withdrawal / Original Credit Transaction.", "Use the same method structure as the IPGOCT page in the 4.5 Gambling documentation."],
+    ["IPGReversal", "Required where a previous payment must be voided.", "Mandatory integration method in the 4.2 PDF."],
+    ["IPGGetTxnStatus", "Reference status check for previous backend transactions.", "Recommended for OCT status/reference checks. Do not use it as the primary approval signal."],
+    ["IPGRefund", "Not included in the focused Gambling 4.2 menu.", "Use the All business models view if a merchant setup explicitly requires it."],
+  ]
+);
+
+const v42FinancialFunctionScopeTable = table(
+  "Financial Institution Function Scope - IPG 4.2",
+  ["Function", "Use in Financial Institution 4.2", "Notes"],
+  [
+    ["IPGPurchase", "Card payment / redirect checkout where enabled.", "Use URL_Notify and exact OK acknowledgement for backend confirmation."],
+    ["IPGStoreCard", "Optional stored-card enrollment.", "Returns Token for subsequent use."],
+    ["IPGGetStoredCardData", "Optional stored-card lookup.", "Uses encrypted Token."],
+    ["IPGPurchaseWithStoredCard", "Optional merchant-initiated stored-card payment.", "Back-end flow with encrypted Token."],
+    ["IPG3DSPurchaseWithStoredCard", "Optional stored-card 3DS flow.", "Customer-facing flow with notification methods."],
+    ["IPGPaymentTokenRequest", "Optional Payment Modal presentation.", "Available for selected ModalType values in 4.2."],
+    ["IPGFundsDisbursement", "Financial Institution disbursement / loan-to-card flow.", "Use the same method structure as the IPGFundsDisbursement page in the 4.5 Financial Institution documentation."],
+    ["IPGReversal", "Required where a previous payment must be voided.", "Mandatory integration method in the 4.2 PDF."],
+    ["IPGGetTxnStatus", "Reference status check for previous backend transactions.", "Recommended for disbursement status/reference checks. Use URL_Notify acknowledgement as the approval source of truth."],
+  ]
+);
+
+const v42EcommerceFunctionScopeTable = table(
+  "ECommerce Function Scope - IPG 4.2",
+  ["Function", "Use in ECommerce 4.2", "Notes"],
+  [
+    ["IPGPurchase", "Regular card payment / redirect checkout.", "Cart logical record and CartItems are mandatory in 4.2."],
+    ["IPGStoreCard", "Optional store-card flow.", "Returns Token for later payments."],
+    ["IPGGetStoredCardData", "Optional stored-card data lookup.", "Back-end method by encrypted Token."],
+    ["IPGPurchaseWithStoredCard", "Optional back-end stored-card payment.", "Uses encrypted Token and IPG_Trnref."],
+    ["IPG3DSPurchaseWithStoredCard", "Optional stored-card 3DS payment.", "Front-end flow with URL_Notify and redirects."],
+    ["IPGFirstRecurring", "Optional first recurring subscription transaction.", "Customer-facing recurring agreement setup."],
+    ["IPGSubsequentRecurring", "Optional subsequent recurring transaction.", "Back-end recurring payment by IPG_Trnref."],
+    ["IPGPaymentTokenRequest", "Optional Payment Modal presentation.", "Loads payment-modal.js with the returned token."],
+    ["IPGRefund", "Required when merchant supports post-payment refunds.", "ECommerce-specific focused menu includes refund."],
+    ["IPGReversal", "Required where a previous payment must be voided.", "Mandatory integration method in the 4.2 PDF."],
+    ["IPGGetTxnStatus", "Reference status check.", "Not the primary payment approval signal."],
+  ]
+);
+
+const v42GamblingMenu = [
+  v42ModelGeneralGroup("ipg-gambling-overview"),
+  v42CallbackDocumentationGroup,
+  v42ImplementationTypesGroup,
+  {
+    title: "API Methods",
+    items: [
+      { id: "ipg-purchase", label: "IPGPurchase", type: "post" },
+      { id: "ipg-v42-store-card", label: "IPGStoreCard", type: "post" },
+      { id: "ipg-v42-get-stored-card-data", label: "IPGGetStoredCardData", type: "post" },
+      { id: "ipg-v42-purchase-with-stored-card", label: "IPGPurchaseWithStoredCard", type: "post" },
+      { id: "ipg-3ds-stored", label: "IPG3DSPurchaseWithStoredCard", type: "post" },
+      { id: "ipg-payment-token-purchase", label: "IPGPaymentTokenRequest", type: "post" },
+    ],
+  },
+  {
+    title: "Backend Methods",
+    items: [
+      { id: "ipg-oct", label: "IPGOCT", type: "post" },
+      { id: "ipg-reversal", label: "IPGReversal", type: "post" },
+      { id: "ipg-get-status", label: "IPGGetTxnStatus", type: "post" },
+    ],
+  },
+  v42BusinessModelsGroup("ipg-v42-gambling-functions"),
+];
+
+const v42FinancialInstitutionMenu = [
+  v42ModelGeneralGroup("ipg-financial-overview"),
+  v42CallbackDocumentationGroup,
+  v42ImplementationTypesGroup,
+  {
+    title: "API Methods",
+    items: [
+      { id: "ipg-purchase", label: "IPGPurchase", type: "post" },
+      { id: "ipg-v42-store-card", label: "IPGStoreCard", type: "post" },
+      { id: "ipg-v42-get-stored-card-data", label: "IPGGetStoredCardData", type: "post" },
+      { id: "ipg-v42-purchase-with-stored-card", label: "IPGPurchaseWithStoredCard", type: "post" },
+      { id: "ipg-3ds-stored", label: "IPG3DSPurchaseWithStoredCard", type: "post" },
+      { id: "ipg-payment-token-purchase", label: "IPGPaymentTokenRequest", type: "post" },
+    ],
+  },
+  {
+    title: "Backend Methods",
+    items: [
+      { id: "ipg-funds-disbursement", label: "IPGFundsDisbursement", type: "post" },
+      { id: "ipg-reversal", label: "IPGReversal", type: "post" },
+      { id: "ipg-get-status", label: "IPGGetTxnStatus", type: "post" },
+    ],
+  },
+  v42BusinessModelsGroup("ipg-v42-financial-functions"),
+];
+
+const v42EcommerceMenu = [
+  v42ModelGeneralGroup("ipg-ecommerce-overview"),
+  v42CallbackDocumentationGroup,
+  v42ImplementationTypesGroup,
+  {
+    title: "API Methods",
+    items: [
+      { id: "ipg-purchase", label: "IPGPurchase", type: "post" },
+      { id: "ipg-v42-store-card", label: "IPGStoreCard", type: "post" },
+      { id: "ipg-v42-get-stored-card-data", label: "IPGGetStoredCardData", type: "post" },
+      { id: "ipg-v42-purchase-with-stored-card", label: "IPGPurchaseWithStoredCard", type: "post" },
+      { id: "ipg-3ds-stored", label: "IPG3DSPurchaseWithStoredCard", type: "post" },
+      { id: "ipg-v42-first-recurring", label: "IPGFirstRecurring", type: "post" },
+      { id: "ipg-v42-subsequent-recurring", label: "IPGSubsequentRecurring", type: "post" },
+      { id: "ipg-payment-token-purchase", label: "IPGPaymentTokenRequest", type: "post" },
+    ],
+  },
+  {
+    title: "Backend Methods",
+    items: [
+      { id: "ipg-refund", label: "IPGRefund", type: "post" },
+      { id: "ipg-reversal", label: "IPGReversal", type: "post" },
+      { id: "ipg-get-status", label: "IPGGetTxnStatus", type: "post" },
+    ],
+  },
+  v42BusinessModelsGroup("ipg-v42-ecommerce-functions"),
+];
+
+const v42GamblingContent = {
+  ...v42Content,
+  "ipg-gambling-overview": {
+    title: "IPG 4.2 - Gambling Business Model",
+    subtitle: "Business Model",
+    description:
+      "Focused IPG 4.2 reference for Gambling integrations using the method set available in the 4.2 PDF.",
+    facts: ["Protocol 4.2", "BM Gambling", "Redirect deposits", "IPGOCT withdrawals"],
+    body: [
+      "This view keeps the shared 4.2 settings, signature rules, HTTP POST format, and notification handling, then filters the method list to the functions normally relevant to Gambling deposits and payment maintenance.",
+      "The provided 4.2 PDF does not include the later wallet-tokenized APIs or IPGEmbeddedPayment. IPGOCT is included here with the same method structure used in the 4.5 Gambling documentation.",
+      "For payment outcome handling, use URL_Notify notifications and return HTTP 200 with body OK.",
+    ],
+    tables: [v42GamblingFunctionScopeTable, v42CompatibilityTable],
+    differences: v42Differences,
+  },
+  "ipg-v42-gambling-functions": {
+    title: "Gambling Function Scope",
+    subtitle: "Business Model",
+    description:
+      "Applicable IPG 4.2 functions for Gambling-focused integrations.",
+    facts: ["IPGOCT withdrawals", "No IPGRefund in focused menu", "Payment Modal available", "Reversal mandatory"],
+    body: [
+      "The focused Gambling 4.2 menu keeps deposit, stored-card, modal, OCT, reversal, and status methods visible.",
+      "Use the All business models view for the complete 4.2 source method list.",
+    ],
+    tables: [v42GamblingFunctionScopeTable],
+    differences: v42Differences,
+  },
+};
+
+const v42FinancialInstitutionContent = {
+  ...v42Content,
+  "ipg-financial-overview": {
+    title: "IPG 4.2 - Financial Institution Business Model",
+    subtitle: "Business Model",
+    description:
+      "Focused IPG 4.2 reference for Financial Institution selections, limited to functions present in the 4.2 PDF.",
+    facts: ["Protocol 4.2", "BM Financial Institution", "Funds disbursement", "Shared card flows"],
+    body: [
+      "This screen keeps the shared card payment, stored-card, modal, funds-disbursement, reversal, and transaction-status methods visible for Financial Institution integrations.",
+      "IPGFundsDisbursement is included here with the same method structure used in the 4.5 Financial Institution documentation.",
+      "For 4.2 payment outcome handling, use method-based URL_Notify notifications and exact OK acknowledgement.",
+    ],
+    tables: [v42FinancialFunctionScopeTable, v42CompatibilityTable],
+    differences: v42Differences,
+  },
+  "ipg-v42-financial-functions": {
+    title: "Financial Institution Function Scope",
+    subtitle: "Business Model",
+    description:
+      "Applicable IPG 4.2 functions for Financial Institution-focused selections.",
+    facts: ["IPGFundsDisbursement", "No IPGRefund in focused menu", "Payment Modal available", "Reversal mandatory"],
+    body: [
+      "The focused Financial Institution 4.2 menu keeps payment, stored-card, modal, funds-disbursement, reversal, and status methods visible.",
+    ],
+    tables: [v42FinancialFunctionScopeTable],
+    differences: v42Differences,
+  },
+};
+
+const v42EcommerceContent = {
+  ...v42Content,
+  "ipg-ecommerce-overview": {
+    title: "IPG 4.2 - ECommerce Business Model",
+    subtitle: "Business Model",
+    description:
+      "Focused IPG 4.2 reference for ECommerce integrations.",
+    facts: ["Protocol 4.2", "BM ECommerce", "CartItems mandatory", "Refunds and recurring"],
+    body: [
+      "The 4.2 source PDF is primarily an e-commerce payment document, so this focused view exposes the full regular card, store-card, recurring, modal, refund, reversal, and status method set.",
+      "IPGPurchase in 4.2 requires the Cart logical record and CartItems. Stored-card flows use Token rather than CardToken.",
+      "For payment outcome handling, use URL_Notify notifications and return HTTP 200 with body OK.",
+    ],
+    tables: [v42EcommerceFunctionScopeTable, v42CompatibilityTable],
+    differences: v42Differences,
+  },
+  "ipg-v42-ecommerce-functions": {
+    title: "ECommerce Function Scope",
+    subtitle: "Business Model",
+    description:
+      "Applicable IPG 4.2 functions for ECommerce integrations.",
+    facts: ["IPGPurchase", "Store card", "Recurring", "Refund and reversal"],
+    body: [
+      "The focused ECommerce 4.2 menu keeps the complete source-document commerce flow visible, including recurring methods and IPGRefund.",
+    ],
+    tables: [v42EcommerceFunctionScopeTable],
+    differences: v42Differences,
+  },
+};
+
 const sharedGeneralItems = [
   { id: "ipg-integration-steps", label: "Integration steps", type: "guide" },
   { id: "ipg-http-post", label: "HTTP POST", type: "guide" },
@@ -3427,7 +3697,11 @@ export const ipgBusinessModelDocuments = {
       "4.5": gamblingVersion45Summary,
     },
     versions: {
-      "4.2": versionedReference(v42Menu, v42Content, scopedVersionSummary("Gambling", "4.2", ["BM Gambling"])),
+      "4.2": versionedReference(
+        v42GamblingMenu,
+        v42GamblingContent,
+        scopedVersionSummary("Gambling", "4.2", ["BM Gambling"])
+      ),
       "4.5": versionedReference(gamblingMenu, gamblingContent, gamblingVersion45Summary),
     },
   },
@@ -3442,8 +3716,8 @@ export const ipgBusinessModelDocuments = {
     },
     versions: {
       "4.2": versionedReference(
-        v42Menu,
-        v42Content,
+        v42FinancialInstitutionMenu,
+        v42FinancialInstitutionContent,
         scopedVersionSummary("Financial Institution", "4.2", ["BM Financial Institution"])
       ),
       "4.5": versionedReference(
@@ -3463,7 +3737,11 @@ export const ipgBusinessModelDocuments = {
       "4.5": scopedVersionSummary("ECommerce", "4.5", ["BM ECommerce"]),
     },
     versions: {
-      "4.2": versionedReference(v42Menu, v42Content, scopedVersionSummary("ECommerce", "4.2", ["BM ECommerce"])),
+      "4.2": versionedReference(
+        v42EcommerceMenu,
+        v42EcommerceContent,
+        scopedVersionSummary("ECommerce", "4.2", ["BM ECommerce"])
+      ),
       "4.5": versionedReference(
         ecommerceMenu,
         ecommerceContent,
