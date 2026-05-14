@@ -913,7 +913,7 @@ export const ipgMenu = [
 ];
 export const ipgContent = {
   "ipg-overview": {
-    title: "iCard IPG API",
+    title: "IPG API 4.5",
     subtitle: "Overview & Architecture",
     description:
       "Complete integration reference for IPG protocol 4.5 across BM Gambling, BM Credit Institution, and BM ECommerce.",
@@ -2347,7 +2347,7 @@ const v42Content = {
     title: "IPG API 4.2",
     subtitle: "Overview & Architecture",
     description:
-      "Protocol 4.2 reference based on IPG_API_v4.2_rev.36_20250416, keeping the same explorer structure while using the 4.2 method set.",
+      "Complete integration reference for IPG protocol 4.2 across BM Gambling, BM Credit Institution, and BM ECommerce.",
     facts: ["Protocol 4.2", "HTTPS", "POST notifications", "Token stored-card flows"],
     body: [
       "The 4.2 flow starts from the merchant checkout page. The merchant posts an IPGPurchase request, redirects the browser to IPG, IPG handles card entry, 3DS, and scheme processing, then posts the result to the merchant and redirects the customer to the checkout result page.",
