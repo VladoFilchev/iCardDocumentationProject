@@ -18,6 +18,9 @@ const routes = [
     path: "/wpa",
     name: "wpa",
     component: WpaExplorer,
+    props: (route) => ({
+      initialActiveId: route.query.section || "overview",
+    }),
   },
   {
     path: "/ipg",

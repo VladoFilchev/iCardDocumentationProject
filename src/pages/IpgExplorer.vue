@@ -197,6 +197,44 @@
           </div>
         </section>
 
+        <section v-if="activeGuidance.length" class="doc-section">
+          <h2>Implementation Guidance</h2>
+          <p class="section-copy">
+            Practical checks for understanding and implementing this IPG 4.5 section.
+          </p>
+          <div class="guidance-grid">
+            <article
+              v-for="item in activeGuidance"
+              :key="item.title"
+              class="guidance-card"
+            >
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.description }}</span>
+            </article>
+          </div>
+        </section>
+
+        <section
+          v-for="section in active.detailSections || []"
+          :key="section.title"
+          class="doc-section"
+        >
+          <h2>{{ section.title }}</h2>
+          <p v-if="section.description" class="section-copy">
+            {{ section.description }}
+          </p>
+          <div class="detail-list">
+            <article
+              v-for="item in section.items"
+              :key="item.title"
+              class="detail-item"
+            >
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.description }}</span>
+            </article>
+          </div>
+        </section>
+
         <section v-if="active.resources?.length" class="doc-section">
           <h2>Resources</h2>
           <div class="resource-grid">
@@ -613,7 +651,7 @@ const hasExampleSnippet = computed(
   () => activeId.value !== "ipg-callback-examples" && hasSnippet(active.value?.example)
 );
 const activeDifferences = computed(() =>
-  Array.isArray(active.value?.differences) ? active.value.differences : []
+  Array.isArray(active.value?.differences) ? active.value.differences.filter(Boolean) : []
 );
 const hasDifferenceContent = computed(() => activeDifferences.value.length > 0);
 const hasCodeContent = computed(
@@ -623,6 +661,160 @@ const hasCodeContent = computed(
     hasExampleSnippet.value ||
     hasDifferenceContent.value
 );
+
+const callbackSourceSummary =
+  "Allow the active environment source address before testing: Production IPv4 185.161.233.7, Production IPv6 2a07:c881::7, or Sandbox IPv4 82.119.81.211.";
+
+const guidanceBySection = {
+  general: [
+    {
+      title: "Confirm scope first",
+      description:
+        "Confirm the selected business model, protocol version, enabled methods, MID, Originator, and supported currencies with iCard before implementation.",
+    },
+    {
+      title: "Build in Sandbox",
+      description:
+        "Use Sandbox credentials and endpoints until request signing, callback processing, error handling, and the required test scenarios are validated.",
+    },
+    {
+      title: "Keep environments separate",
+      description:
+        "Store Sandbox and Production endpoints, credentials, keys, MIDs, and callback allowlists in separate configuration profiles.",
+    },
+    {
+      title: "Prepare operational logging",
+      description:
+        "Log OrderID, IPG method, environment, response status, callback status, and IPG transaction reference without logging sensitive card data or private keys.",
+    },
+  ],
+  security: [
+    {
+      title: "Protect private keys",
+      description:
+        "Keep the merchant private key in a secrets manager or protected key store. Never expose it to browser code, source control, logs, or support messages.",
+    },
+    {
+      title: "Canonicalize exactly",
+      description:
+        "Small differences in key casing, natural sorting, Boolean conversion, empty values, UTF-8 encoding, or semicolon joining will produce an invalid signature.",
+    },
+    {
+      title: "Verify before processing",
+      description:
+        "Verify every signed response and callback with the iCard public key before updating orders, storing CardToken values, or initiating follow-up operations.",
+    },
+    {
+      title: "Plan key rotation",
+      description:
+        "Use KeyIndex and KeyIndexResp consistently and maintain a controlled rotation procedure so old and new keys can be handled during transition periods.",
+    },
+  ],
+  callbacks: [
+    {
+      title: "Allow the correct source",
+      description: callbackSourceSummary,
+    },
+    {
+      title: "Verify and process idempotently",
+      description:
+        "Verify Signature first, then process the event idempotently using stable identifiers such as OrderId and provider transaction references.",
+    },
+    {
+      title: "Acknowledge only after acceptance",
+      description:
+        "Return HTTP 200 OK only after the callback is parsed, verified, and durably accepted for processing. Non-200 responses trigger retries.",
+    },
+    {
+      title: "Use callbacks as the source of truth",
+      description:
+        "Do not mark a payment successful from the browser redirect alone. Use the verified backend callback to determine the final payment outcome.",
+    },
+  ],
+  implementation: [
+    {
+      title: "Choose one primary checkout flow",
+      description:
+        "Select Redirect, Embedded, Modal, or a wallet-specific SDK flow according to the required customer experience and supported business model.",
+    },
+    {
+      title: "Keep signing on the backend",
+      description:
+        "Create signatures, hold credentials, and communicate with IPG from the merchant backend. Browser code should never receive private signing material.",
+    },
+    {
+      title: "Implement the complete lifecycle",
+      description:
+        "Cover initiation, synchronous response verification, callback handling, cancellation or retry behavior, and the model-specific backend methods.",
+    },
+    {
+      title: "Test failure paths",
+      description:
+        "Test declines, invalid signatures, unavailable wallets, customer cancellation, callback retries, duplicate callbacks, and temporary network failures.",
+    },
+  ],
+  methods: [
+    {
+      title: "Validate every mandatory field",
+      description:
+        "Build requests from the parameter table, enforce documented formats and lengths, and reject missing or malformed values before signing.",
+    },
+    {
+      title: "Use a unique OrderID",
+      description:
+        "Generate and persist a unique OrderID before sending the request. Use it to correlate the request, response, callback, support case, and reconciliation data.",
+    },
+    {
+      title: "Verify synchronous responses",
+      description:
+        "Verify the response Signature and inspect Status and StatusMsg before using returned URLs, tokens, transaction references, or other response data.",
+    },
+    {
+      title: "Design retry-safe behavior",
+      description:
+        "Do not blindly resend payment or payout operations after timeouts. Check the documented status or reversal path and protect against duplicate execution.",
+    },
+  ],
+  models: [
+    {
+      title: "Use only model-supported methods",
+      description:
+        "The selected business model determines which wallet flows and backend methods are permitted. Do not assume a method available in another model is enabled.",
+    },
+    {
+      title: "Check field differences",
+      description:
+        "Review model-specific mandatory fields, OrderID length rules, payout or refund references, and wallet implementation differences before coding.",
+    },
+    {
+      title: "Test the real model workflow",
+      description:
+        "Certification should cover the exact business flow: deposits and OCT for Gambling, disbursement for Financial Institution, or purchases and refunds for E-commerce.",
+    },
+    {
+      title: "Document operational ownership",
+      description:
+        "Define who monitors callbacks, investigates timeouts, performs reversals or refunds, and contacts iCard support after launch.",
+    },
+  ],
+};
+
+const activeGuidance = computed(() => {
+  if (selectedVersion.value !== "4.5") return [];
+
+  if (activeId.value.startsWith("ipg-callback")) return guidanceBySection.callbacks;
+  if (active.value?.subtitle === "Security & Signatures") return guidanceBySection.security;
+  if (active.value?.subtitle === "Implementation Types" || active.value?.subtitle === "Wallet Deposits") {
+    return guidanceBySection.implementation;
+  }
+  if (active.value?.subtitle === "API Methods" || active.value?.subtitle === "Backend Methods") {
+    return guidanceBySection.methods;
+  }
+  if (active.value?.subtitle === "Business Models" || active.value?.subtitle === "Business Model") {
+    return guidanceBySection.models;
+  }
+  return guidanceBySection.general;
+});
 
 function updateIpgRoute(nextQuery) {
   router.replace({

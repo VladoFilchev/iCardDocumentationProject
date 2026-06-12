@@ -274,6 +274,43 @@ const paymentTokenResponseFields = [
   r("Token", "_TOKEN_", "String", "Token used when loading payment-modal.js."),
   r("Signature", "Byte[] BASE64", "BASE64", "Response signature."),
 ];
+const modalImplementationFlowTable = table(
+  "Payment Modal Implementation Flow",
+  ["Step", "Runs in", "Implementation responsibility"],
+  [
+    ["1. Create the modal transaction", "Merchant backend", "Validate the order and send a signed IPGPaymentToken request with the required ModalType and payment parameters."],
+    ["2. Verify the token response", "Merchant backend", "Verify the response Signature and confirm the successful Status before exposing Token to the merchant frontend."],
+    ["3. Load payment-modal.js", "Merchant frontend", "Create the required #ipg wrapper and load payment-modal.js with the verified Token, correct environment domain, and selected theme."],
+    ["4. Handle the customer experience", "Merchant frontend", "Use modal lifecycle events to update the interface when the form loads, the customer cancels, payment completes, or an error occurs."],
+    ["5. Confirm the financial result", "Merchant backend", "Verify and process the signed URL_Notify callback. Modal events and visible success screens are not the final payment source of truth."],
+  ],
+  "Unlike Redirect checkout, the customer remains on the merchant page while an IPG-controlled overlay securely collects payment data."
+);
+const modalConfigurationTable = table(
+  "Payment Modal Script Configuration",
+  ["Value", "Allowed value", "Purpose"],
+  [
+    ["_DOMAIN_", "https://dev-ipg.icards.eu/sandbox/ or https://ipg.icard.com/", "Selects the Sandbox or Production payment-modal.js script."],
+    ["_TOKEN_", "Verified Token returned by IPGPaymentToken", "Links the modal instance to the signed backend payment-token request."],
+    ["_THEME_", "classic or dark", "Controls the supported modal appearance. If omitted or invalid, classic is applied."],
+    ["Wrapper", "<div id=\"ipg\"></div>", "Required mount point used by payment-modal.js."],
+  ]
+);
+const modalFrontendEventsTable = table(
+  "Payment Modal Frontend Events",
+  ["Event", "Meaning", "Recommended merchant action"],
+  [
+    ["ipg.formload.success", "The payment form was displayed.", "Remove loading state and allow the customer to interact with the modal."],
+    ["ipg.user.cancel", "The customer pressed Cancel.", "Close or reset the modal experience and keep the order unpaid."],
+    ["ipg.payment.success", "The modal displayed its payment-success page.", "Show provisional success UX, but wait for the verified URL_Notify result before fulfilment."],
+    ["ipg.user.close.on.success", "The customer closed the success page.", "Return focus to the merchant page and show the current order-processing state."],
+    ["ipg.payment.error", "The modal displayed a payment-error page.", "Show an appropriate retry or alternative-payment option."],
+    ["ipg.user.close.on.error", "The customer closed the error page.", "Return focus and preserve the unpaid order state."],
+    ["ipg.loadmodal.error", "The modal loading process failed.", "Log the technical failure, keep the order unpaid, and offer retry or another payment method."],
+    ["ipg.user.close.on.loadmodal.error", "The customer closed the modal loading-error page.", "Reset the modal UI and preserve the order for a controlled retry."],
+  ],
+  "Frontend events control customer experience only. Always use the signed backend notification as the final financial result."
+);
 const callbackPaymentFields = [
   f("OrderId", "78A9F22B-...", "String", "Optional", "Merchant order placeholder."),
   f("MID", "000000000000123", "AN(15)", "Optional", "Identifier of the virtual terminal."),
@@ -402,19 +439,33 @@ const backendBaseFields = [
   f("Originator", "33", "Int", "Mandatory", "Merchant company identifier."),
   f("MID", "000000000000123", "AN(15)", "Mandatory", "Virtual terminal identifier."),
 ];
-const octRequestFields = [
-  f("IPGmethod", "IPGOCT", "String", "Mandatory", "Fixed value: IPGOCT."),
-  ...backendBaseFields,
-  f("OrderID", "610F0A8D-7210-...", "String(50)", "Mandatory", "Unique order identifier for this withdrawal."),
-  f("IPG_Trnref", "20250602110038002328", "String", "Conditional", "Mandatory for OCT by TRN plus Approval. IPG transaction reference of the original purchase."),
-  f("Approval", "123456", "String", "Conditional", "Mandatory for OCT by TRN plus Approval. Approval code from original transaction."),
-  f("CardToken", "40B1B011C4A21EA6...", "String", "Conditional", "Mandatory for OCT by CardToken. Use instead of IPG_Trnref plus Approval."),
-  f("Amount", "23.45", "Double", "Mandatory", "Withdrawal amount."),
-  f("Currency", "978", "N(3)", "Mandatory", "ISO numeric currency code."),
-  f("RecipientFirstName", "John", "String(35)", "Mandatory", "Recipient first name. Cannot be all spaces, zeroes, numerics, or question marks."),
-  f("RecipientLastName", "Smith", "String(35)", "Mandatory", "Recipient last name. Same restrictions as RecipientFirstName."),
-  f("OutputFormat", "json", "String", "Optional", "xml by default, or json."),
-  signatureField,
+const octCommonRequestFields = (version) => [
+  f("IPGmethod", "IPGOCT", "String", "Mandatory", "Name of the method requested for execution from IPG. Fixed value: IPGOCT."),
+  f("KeyIndex", "1", "Int", "Mandatory", "Identifier of the private key used for the request signature."),
+  f("KeyIndexResp", "1", "Int", "Mandatory", "Identifier of the private key used to build the response signature."),
+  f("IPGVersion", version, "String", "Mandatory", `Protocol version used for the transmission. Use ${version} in this documentation view.`),
+  f("Originator", "33", "Int", "Mandatory", "Value that uniquely identifies the merchant company that has signed a contract with iCard AD."),
+  f("MID", "000000000000123", "AN(15)", "Mandatory", "Identifier of the virtual terminal used for the transaction."),
+  f("OrderID", "610F0A8D-7210-4828-B625-C02E843DE7D8", "String(50)", "Mandatory", "Unique merchant request identifier used to recognize the withdrawal."),
+];
+const octCommonAmountFields = [
+  f("Amount", "23.45", "Double", "Mandatory", "Amount of the gaming withdrawal."),
+  f("Currency", "978", "N(3)", "Mandatory", "ISO numeric currency code. The currency must be equal to the MID currency."),
+  f("RecipientFirstName", "John", "String(35)", "Mandatory", "Recipient first name. Must not contain all spaces, all zeroes, all numerics, or question marks."),
+  f("RecipientLastName", "Smith", "String(35)", "Mandatory", "Recipient last name. Must not contain all spaces, all zeroes, all numerics, or question marks."),
+  f("OutputFormat", "json", "String", "Optional", "Response format: xml or json. If omitted, the default is xml."),
+  f("Signature", "uIkMPIYhgE.......7DEhXOaUKakY=", "BASE64", "Mandatory", "Signed HASH for all request properties. Signature is always the last POST parameter and is not included in its own calculation."),
+];
+const octByPanFields = (version) => [
+  ...octCommonRequestFields(version),
+  f("CardToken", "40B1B011C4A21EA65A8AA06E9D767ECE348ADB2E2D4E4E6C3A0536E452619059", "String", "Mandatory", "Token of the destination card received after the customer saved the card. Used instead of IPG_Trnref and Approval."),
+  ...octCommonAmountFields,
+];
+const octByTrnApprovalFields = (version) => [
+  ...octCommonRequestFields(version),
+  f("IPG_Trnref", "20250602110038002328", "String", "Mandatory", "IPG transaction reference of the previously executed payment. Mandatory together with Approval for OCT by TRN and Approval."),
+  f("Approval", "123456", "String", "Mandatory", "Approval code returned by the issuer for the original payment. Mandatory together with IPG_Trnref."),
+  ...octCommonAmountFields,
 ];
 const octResponseFields = [
   r("IPGmethod", "IPGOCT", "String", "Method name."),
@@ -425,6 +476,139 @@ const octResponseFields = [
   r("StatusMsg", "Success", "String", "Status message."),
   r("Signature", "uIkMPI...KakY=", "BASE64", "Response signature for verification."),
 ];
+const createOctDocumentation = (version) => ({
+  title: "IPGOCT",
+  subtitle: "Backend Methods",
+  description:
+    "Gaming-withdrawal Original Credit Transaction with two documented destination-reference paths: OCT by PAN and OCT by original IPG transaction reference plus Approval.",
+  facts: ["BM Gambling only", "IPGmethod=IPGOCT", "OCT by PAN", "OCT by TRN + Approval"],
+  availability: availability(true, false, false),
+  body: [
+    "IPGOCT is a server-to-server backend method used for Gaming Withdrawal. IPG returns a synchronous signed response with the execution result.",
+    "The request can be initialized only from a previously executed payment transaction or from the token of a previously stored card. IPG validates that the MID is valid and that Currency is valid for the MID.",
+    "For OCT by PAN, the supplied documentation sends the destination card as CardToken rather than defining a raw PAN request property. The explorer preserves that documented request field.",
+    "Use exactly one destination-reference path per request. Do not send CardToken together with IPG_Trnref and Approval.",
+  ],
+  fieldSections: [
+    {
+      title: "OCT by PAN - Request Parameters",
+      description:
+        "Use the stored CardToken of the destination card. CardToken replaces the IPG_Trnref and Approval pair; a raw PAN property is not defined in the supplied IPGOCT request table.",
+      fields: octByPanFields(version),
+    },
+    {
+      title: "OCT by TRN and Approval - Request Parameters",
+      description:
+        "Use the IPG_Trnref and Approval from a previously executed payment transaction. Both reference properties are mandatory for this path.",
+      fields: octByTrnApprovalFields(version),
+    },
+    {
+      title: "Response Parameters",
+      description:
+        "The response contract is shared by both OCT paths. IPGTrnrefOriginal is available when OCT was executed by IPG_Trnref and Approval.",
+      fields: octResponseFields,
+    },
+  ],
+  tables: [
+    table(
+      "IPGOCT Destination Reference Paths",
+      ["Path", "Send", "Do not send", "Response distinction"],
+      [
+        ["OCT by PAN", "CardToken", "IPG_Trnref and Approval", "IPGTrnref identifies the new OCT. IPGTrnrefOriginal is not expected for the token path."],
+        ["OCT by TRN and Approval", "IPG_Trnref and Approval", "CardToken", "IPGTrnref identifies the new OCT and IPGTrnrefOriginal identifies the referenced original transaction."],
+      ],
+      "Both paths use IPGmethod=IPGOCT and the same mandatory MID, OrderID, amount, currency, recipient-name, output-format, and signature rules."
+    ),
+    table(
+      "IPGOCT Validation Rules",
+      ["Validation", "Documented behavior"],
+      [
+        ["MID", "IPG checks that MID is valid."],
+        ["Currency", "IPG checks that Currency is valid for the MID and equal to the MID currency."],
+        ["Recipient names", "First and last name must not contain all spaces, all zeroes, all numerics, or question marks."],
+        ["OutputFormat", "Optional xml or json; xml is the default when omitted."],
+        ["Signature", "Mandatory and always the last POST parameter because it is not included in its own calculation."],
+      ]
+    ),
+  ],
+  examplesTitle: "IPGOCT Request Variants and Response",
+  examples: [
+    {
+      title: "OCT by PAN",
+      description: "The documented PAN/card-destination path sends CardToken and omits IPG_Trnref and Approval.",
+      code: `IPGmethod=IPGOCT
+KeyIndex=1
+KeyIndexResp=1
+IPGVersion=${version}
+Originator=33
+MID=000000000000123
+OrderID=610F0A8D-7210-4828-B625-C02E843DE7D8
+CardToken=40B1B011C4A21EA65A8AA06E9D767ECE348ADB2E2D4E4E6C3A0536E452619059
+Amount=23.45
+Currency=978
+RecipientFirstName=John
+RecipientLastName=Smith
+OutputFormat=json
+Signature=<base64-signature>`,
+    },
+    {
+      title: "OCT by TRN and Approval",
+      description: "References the original payment and omits CardToken.",
+      code: `IPGmethod=IPGOCT
+KeyIndex=1
+KeyIndexResp=1
+IPGVersion=${version}
+Originator=33
+MID=000000000000123
+OrderID=610F0A8D-7210-4828-B625-C02E843DE7D8
+IPG_Trnref=20250602110038002328
+Approval=123456
+Amount=23.45
+Currency=978
+RecipientFirstName=John
+RecipientLastName=Smith
+OutputFormat=json
+Signature=<base64-signature>`,
+    },
+    {
+      title: "Successful IPGOCT response",
+      description: "IPGTrnrefOriginal is returned for OCT by TRN and Approval.",
+      code: `{
+  "IPGmethod": "IPGOCT",
+  "OrderID": "610F0A8D-7210-4828-B625-C02E843DE7D8",
+  "IPGTrnref": "20250602110038002329",
+  "IPGTrnrefOriginal": "20250602110038002328",
+  "Status": "0",
+  "StatusMsg": "Success",
+  "Signature": "<base64-signature>"
+}`,
+    },
+  ],
+  request: `IPGmethod=IPGOCT
+KeyIndex=1
+KeyIndexResp=1
+IPGVersion=${version}
+Originator=33
+MID=000000000000123
+OrderID=610F0A8D-7210-4828-B625-C02E843DE7D8
+IPG_Trnref=20250602110038002328
+Approval=123456
+Amount=23.45
+Currency=978
+RecipientFirstName=John
+RecipientLastName=Smith
+OutputFormat=json
+Signature=<base64-signature>`,
+  response: `{
+  "IPGmethod": "IPGOCT",
+  "OrderID": "610F0A8D-7210-4828-B625-C02E843DE7D8",
+  "IPGTrnref": "20250602110038002329",
+  "IPGTrnrefOriginal": "20250602110038002328",
+  "Status": "0",
+  "StatusMsg": "Success",
+  "Signature": "<base64-signature>"
+}`,
+});
 const fundsDisbursementRequestFields = [
   f("IPGmethod", "IPGFundsDisbursement", "String", "Mandatory", "Fixed value."),
   ...backendBaseFields,
@@ -449,6 +633,137 @@ const fundsDisbursementResponseFields = [
   r("StatusMsg", "Success", "String", "Status message."),
   r("Signature", "uIkMPI...KakY=", "BASE64", "Response signature."),
 ];
+const fundsDisbursementCommonRequestFields = (version) => [
+  f("IPGmethod", "IPGFundsDisbursement", "String", "Mandatory", "Name of the method requested for execution from IPG. Fixed value: IPGFundsDisbursement."),
+  f("KeyIndex", "1", "Int", "Mandatory", "Identifier of the private key used for the request signature."),
+  f("KeyIndexResp", "1", "Int", "Mandatory", "Identifier of the private key used to build the response signature."),
+  f("IPGVersion", version, "String", "Mandatory", `Protocol version used for the transmission. Use ${version} in this documentation view.`),
+  f("Originator", "33", "Int", "Mandatory", "Value that uniquely identifies the merchant company that has signed a contract with iCard AD."),
+  f("MID", "000000000000123", "AN(15)", "Mandatory", "Identifier of the virtual terminal used for the transaction."),
+  f("OrderID", "610F0A8D-7210-4828-B625-C02E843DE7D8", "String(255)", "Mandatory", "Unique merchant request identifier for the disbursement."),
+];
+const fundsDisbursementCommonAmountFields = [
+  f("Amount", "23.45", "Double", "Mandatory", "Disbursement amount."),
+  f("Currency", "978", "N(3)", "Mandatory", "ISO numeric currency code. The currency must be valid for the MID."),
+  f("RecipientFirstName", "John", "String", "Mandatory", "Recipient first name."),
+  f("RecipientLastName", "Smith", "String", "Mandatory", "Recipient last name."),
+  f("OutputFormat", "json", "String", "Optional", "Response format: xml or json. If omitted, the default is xml."),
+  f("Signature", "uIkMPIYhgE.......7DEhXOaUKakY=", "BASE64", "Mandatory", "Signed HASH for all request properties. Signature is always the last POST parameter."),
+];
+const fundsDisbursementByCardTokenFields = (version) => [
+  ...fundsDisbursementCommonRequestFields(version),
+  f("CardToken", "40B1B011C4A21EA65A8AA06E9D767ECE348ADB2E2D4E4E6C3A0536E452619059", "String", "Mandatory", "Authorized destination-card token. Use instead of IPG_Trnref and Approval."),
+  ...fundsDisbursementCommonAmountFields,
+];
+const fundsDisbursementByTrnApprovalFields = (version) => [
+  ...fundsDisbursementCommonRequestFields(version),
+  f("IPG_Trnref", "20250602110038002328", "String", "Mandatory", "IPG transaction reference of the previously executed payment. Mandatory together with Approval."),
+  f("Approval", "123456", "String", "Mandatory", "Approval code from the original payment. Mandatory together with IPG_Trnref."),
+  ...fundsDisbursementCommonAmountFields,
+];
+const createFundsDisbursementDocumentation = (version) => ({
+  title: "IPGFundsDisbursement",
+  subtitle: "Backend Methods",
+  description:
+    "Financial Institution funds-disbursement method with two supported destination-reference paths: an authorized CardToken or an original IPG transaction reference plus Approval.",
+  facts: ["BM Financial Institution only", "IPGmethod=IPGFundsDisbursement", "CardToken path", "TRN + Approval path"],
+  availability: availability(false, true, false),
+  body: [
+    "IPGFundsDisbursement is a server-to-server backend method used for approved Financial Institution disbursements to a cardholder card.",
+    "Use exactly one destination-reference path in a request. Send CardToken, or send both IPG_Trnref and Approval. Do not combine the two paths.",
+    "Validate the recipient, amount, currency, destination reference, and duplicate protection before signing and sending the request.",
+  ],
+  fieldSections: [
+    {
+      title: "Funds Disbursement by CardToken - Request Parameters",
+      description: "Use an authorized destination-card token and omit IPG_Trnref and Approval.",
+      fields: fundsDisbursementByCardTokenFields(version),
+    },
+    {
+      title: "Funds Disbursement by TRN and Approval - Request Parameters",
+      description: "Use both the original payment IPG_Trnref and Approval and omit CardToken.",
+      fields: fundsDisbursementByTrnApprovalFields(version),
+    },
+    {
+      title: "Response Parameters",
+      description: "Verify the response signature before using the returned transaction references, RRN, or status.",
+      fields: fundsDisbursementResponseFields,
+    },
+  ],
+  tables: [
+    table(
+      "IPGFundsDisbursement Destination Reference Paths",
+      ["Path", "Send", "Do not send", "Operational use"],
+      [
+        ["By CardToken", "CardToken", "IPG_Trnref and Approval", "Disburse to an authorized stored-card destination."],
+        ["By TRN and Approval", "IPG_Trnref and Approval", "CardToken", "Disburse using the original approved payment reference."],
+      ],
+      "Both paths use IPGmethod=IPGFundsDisbursement and share the same MID, OrderID, amount, currency, recipient-name, output-format, and signature rules."
+    ),
+  ],
+  examplesTitle: "IPGFundsDisbursement Request Variants",
+  examples: [
+    {
+      title: "Disbursement by CardToken",
+      description: "Uses CardToken and omits IPG_Trnref and Approval.",
+      code: `IPGmethod=IPGFundsDisbursement
+KeyIndex=1
+KeyIndexResp=1
+IPGVersion=${version}
+Originator=33
+MID=000000000000123
+OrderID=610F0A8D-7210-4828-B625-C02E843DE7D8
+CardToken=40B1B011C4A21EA65A8AA06E9D767ECE348ADB2E2D4E4E6C3A0536E452619059
+Amount=23.45
+Currency=978
+RecipientFirstName=John
+RecipientLastName=Smith
+OutputFormat=json
+Signature=<base64-signature>`,
+    },
+    {
+      title: "Disbursement by TRN and Approval",
+      description: "Uses both original-payment reference properties and omits CardToken.",
+      code: `IPGmethod=IPGFundsDisbursement
+KeyIndex=1
+KeyIndexResp=1
+IPGVersion=${version}
+Originator=33
+MID=000000000000123
+OrderID=610F0A8D-7210-4828-B625-C02E843DE7D8
+IPG_Trnref=20250602110038002328
+Approval=123456
+Amount=23.45
+Currency=978
+RecipientFirstName=John
+RecipientLastName=Smith
+OutputFormat=json
+Signature=<base64-signature>`,
+    },
+  ],
+  request: `IPGmethod=IPGFundsDisbursement
+KeyIndex=1
+KeyIndexResp=1
+IPGVersion=${version}
+Originator=33
+MID=000000000000123
+OrderID=610F0A8D-7210-4828-B625-C02E843DE7D8
+CardToken=40B1B011C4A21EA65A8AA06E9D767ECE348ADB2E2D4E4E6C3A0536E452619059
+Amount=23.45
+Currency=978
+RecipientFirstName=John
+RecipientLastName=Smith
+OutputFormat=json
+Signature=<base64-signature>`,
+  response: `{
+  "IPGmethod": "IPGFundsDisbursement",
+  "OrderID": "610F0A8D-7210-4828-B625-C02E843DE7D8",
+  "IPGTrnref": "20250602110038002329",
+  "Status": "0",
+  "StatusMsg": "Success",
+  "Signature": "<base64-signature>"
+}`,
+});
 const refundRequestFields = [
   f("IPGmethod", "IPGRefund", "String", "Mandatory", "Fixed value: IPGRefund."),
   ...backendBaseFields,
@@ -671,10 +986,20 @@ const callbackHandlingStepsTable = table(
   "Callback Handling Procedure",
   ["Step", "Merchant action", "Details"],
   [
-    ["1", "Accept and verify the callback", "Accept callbacks only from payment platform IP addresses provided by iCard technical support. Validate the callback sender and data integrity by verifying the Signature included in every callback."],
+    ["1", "Accept and verify the callback", "Accept callbacks only from the documented IPG callback addresses for the active environment. Validate the callback sender and data integrity by verifying the Signature included in every callback."],
     ["2", "Confirm callback receipt", "Return a synchronous HTTP response. Use 200 OK when the callback is valid and accepted. Use an error status that matches the error type when processing fails."],
     ["3", "Perform the required actions", "For prescriptive callbacks, perform the actions stated as required. For informational callbacks, perform the actions that match the web service operation, such as customer notification."],
   ]
+);
+const callbackIpAllowlistTable = table(
+  "Callback Source IP Allowlist",
+  ["Environment", "Address type", "Source address", "Merchant action"],
+  [
+    ["Production", "External IPv4", "185.161.233.7", "Allow inbound callback HTTP POST requests from this exact production IPv4 address."],
+    ["Production", "External IPv6", "2a07:c881::7", "Allow inbound callback HTTP POST requests from this exact production IPv6 address when IPv6 is enabled on the merchant endpoint."],
+    ["Sandbox", "IPv4", "82.119.81.211", "Allow inbound callback HTTP POST requests from this exact sandbox IPv4 address during integration and certification testing."],
+  ],
+  "Configure the allowlist separately for Sandbox and Production. Source-IP validation is an additional network control and does not replace verification of the callback Signature."
 );
 const callbackResponseCodesTable = table(
   "Callback Response Codes",
@@ -873,6 +1198,7 @@ export const ipgMenu = [
       { id: "ipg-modal-overview", label: "Modal implementation", type: "guide" },
       { id: "ipg-wallet-overview", label: "Wallet JS SDK overview", type: "guide" },
       { id: "ipg-apple-pay", label: "Apple Pay JS SDK", type: "guide" },
+      { id: "ipg-apple-domain", label: "Apple Pay domain registration", type: "guide" },
       { id: "ipg-google-pay", label: "Google Pay JS SDK", type: "guide" },
       { id: "ipg-wallet-sdk", label: "JS SDK setup", type: "guide" },
     ],
@@ -1158,13 +1484,15 @@ Remove Signature from the callback or response body, lowercase and flatten the r
     subtitle: "Callbacks",
     description:
       "A callback is a system message sent from the IPG API payment platform to the merchant web service.",
-    facts: ["HTTP POST", "URL_Notify", "Verify Signature", "Respond HTTP 200 OK"],
+    facts: ["HTTP POST", "URL_Notify", "Environment IP allowlist", "Verify Signature", "Respond HTTP 200 OK"],
     body: [
       "Callbacks contain information about a specific event in the payment platform that usually takes place while processing a payment or storing customer payment data.",
       "The callback is the reliable backend channel for payment outcome and stored-card information. Browser redirects should not be treated as settlement confirmation.",
-      "Every callback must be accepted only from the payment platform IP addresses provided by iCard technical support and must be verified by checking the included Signature.",
+      "Every callback must be accepted only from the documented source addresses for the active environment and must be verified by checking the included Signature.",
+      "Production callbacks may originate from IPv4 address 185.161.233.7 or IPv6 address 2a07:c881::7. Sandbox callbacks originate from IPv4 address 82.119.81.211.",
+      "Treat source-IP filtering and signature verification as separate controls: the allowlist limits network access, while the Signature proves message integrity and authenticity.",
     ],
-    tables: [callbackHandlingStepsTable],
+    tables: [callbackIpAllowlistTable, callbackHandlingStepsTable],
   },
   "ipg-callback-retries": {
     title: "Handling & Retries",
@@ -1189,8 +1517,10 @@ Remove Signature from the callback or response body, lowercase and flatten the r
       "There can be cases when callbacks are not received at the specified URLs for different reasons.",
       "The first split is whether callbacks are not triggered by any event at all, or whether requests are accepted but delivery to the merchant URL is failing.",
       "Start by confirming that the correct requests were sent and accepted by the platform, then verify that the callback URLs are correct and reachable.",
+      "Confirm that the firewall, reverse proxy, load balancer, CDN, and application security layer allow the correct callback source address for the environment being tested.",
+      "For Production, allow 185.161.233.7 and 2a07:c881::7. For Sandbox, allow 82.119.81.211. If the endpoint does not support IPv6, make sure IPv4 delivery remains reachable.",
     ],
-    tables: [callbackTroubleshootingTable],
+    tables: [callbackIpAllowlistTable, callbackTroubleshootingTable],
     resources: [resources.integrationSupport, resources.customerSupport],
   },
   "ipg-callback-payment": {
@@ -1448,28 +1778,46 @@ Success payment
     title: "Modal Implementation",
     subtitle: "Implementation Types",
     description:
-      "Modal checkout obtains a token through IPGPaymentToken and loads payment-modal.js on the merchant page.",
-    facts: ["IPGPaymentToken", "payment-modal.js", "classic or dark theme", "URL_Notify remains required"],
+      "Payment Modal opens an IPG-controlled payment overlay without navigating the customer away from the merchant page.",
+    facts: ["Customer remains on merchant page", "Backend token request", "IPG-controlled overlay", "URL_Notify is authoritative"],
     availability: allBusinessModels,
     body: [
-      "The modal changes the presentation of checkout, but backend confirmation still depends on signed URL_Notify callbacks.",
-      "The token returned by IPGPaymentToken is passed to payment-modal.js together with the selected theme.",
+      "Payment Modal is not a redirect flow. The merchant backend first sends IPGPaymentToken and verifies the returned Token. The merchant frontend then loads payment-modal.js, which opens the payment interface as an overlay on the existing merchant page.",
+      "The merchant page remains visible behind the modal. IPG owns the payment form and sensitive payment-data collection inside the overlay, while the merchant controls the surrounding page, loading state, close behavior, and customer messaging.",
+      "Frontend modal events are useful for customer experience, but they do not confirm the financial result. Verify and process the signed URL_Notify callback before fulfilling an order or marking it paid.",
     ],
     resources: [resources.modalWorkflow, resources.modalVisualization],
-    request: `<div id="ipg"></div>
-<script>
-function loadModal() {
-  const src = _DOMAIN_ + "js/payment-modal.js?token=" + _TOKEN_ + "&theme=" + _THEME_;
+    tables: [modalImplementationFlowTable, modalConfigurationTable, modalFrontendEventsTable],
+    examplesTitle: "Payment Modal Implementation",
+    examples: [
+      {
+        title: "1. Required Wrapper",
+        description: "Add the modal mount point to the merchant checkout page.",
+        code: `<div id="ipg"></div>`,
+      },
+      {
+        title: "2. Load the Verified Token",
+        description: "Load payment-modal.js only after the backend verifies the IPGPaymentToken response.",
+        code: `<script>
+function loadModal(domain, token, theme = "classic") {
   const script = document.createElement("script");
-  script.src = src;
+  script.src = domain + "js/payment-modal.js?token=" + encodeURIComponent(token) + "&theme=" + theme;
   script.id = "ipg-io-js";
-  script.async = "async";
-  document.querySelector("body").appendChild(script);
+  script.async = true;
+  document.body.appendChild(script);
 }
 </script>`,
-    response: `_DOMAIN_: https://ipg.icard.com/ or https://dev-ipg.icards.eu/sandbox/
-_THEME_: classic or dark
-_TOKEN_: value from IPGPaymentToken response`,
+      },
+      {
+        title: "3. Handle Modal Events",
+        description: "Use frontend events for customer experience while waiting for the backend callback.",
+        code: `window.addEventListener("ipg.formload.success", () => hideLoadingState());
+window.addEventListener("ipg.user.cancel", () => keepOrderUnpaid());
+window.addEventListener("ipg.payment.success", () => showProcessingState());
+window.addEventListener("ipg.payment.error", () => showRetryOptions());
+window.addEventListener("ipg.loadmodal.error", () => showAlternativePaymentMethods());`,
+      },
+    ],
   },
   "ipg-wallet-overview": {
     title: "Wallet JS SDK Overview",
@@ -1504,6 +1852,109 @@ _TOKEN_: value from IPGPaymentToken response`,
     ],
     resources: [resources.walletSdk],
     media: [media.appleMobileButtons, media.appleSdkRedirect],
+  },
+  "ipg-apple-domain": {
+    title: "Apple Pay Domain Registration",
+    subtitle: "Implementation Types",
+    description:
+      "Register and verify the merchant domain, then configure the HTTPS, TLS, SNI, and network allowlists required for Apple Pay on the web.",
+    facts: ["HTTPS and valid SSL", "TLS 1.2 or later", "SNI required", "Strict Apple allowlists"],
+    availability: allBusinessModels,
+    link: {
+      label: "Open Apple's latest server setup requirements",
+      href: "https://developer.apple.com/documentation/applepayontheweb/setting-up-your-server",
+    },
+    body: [
+      "Complete this process for every merchant domain that displays Apple Pay. Serve every page containing Apple Pay over HTTPS, use a valid SSL certificate, and support TLS 1.2 or later with one of the approved cipher suites below.",
+      "After the HTTPS, TLS, SNI, and network allowlist requirements are complete, send the exact merchant domain to the iCard integration team. iCard will register the domain for Apple Pay and coordinate the domain-verification process with the merchant.",
+      "When the iCard integration team provides the Apple domain-association verification file, host it without redirects at https://[DOMAIN]/.well-known/apple-developer-merchantid-domain-association and confirm that it is publicly reachable.",
+      "For merchant validation, allow the merchant server to connect over HTTPS on TCP port 443 to the appropriate Apple Pay gateway domain and IP addresses. Include the TLS Server Name Indication extension because Apple Pay requires SNI on every connection.",
+      "Use a strict allowlist for the listed Apple gateway domains and addresses. Production servers must use only production gateway services; the certificate gateway addresses are for development and sandbox testing only.",
+      "If the merchant domain is protected from public access, allow Apple's domain-verification source ranges to reach the verification file. Apple can change these requirements and ranges, so always check the official page linked above before deployment or firewall changes.",
+    ],
+    notes: [
+      "Do not redirect the Apple domain-association verification-file URL.",
+      "Send the exact domain that will display Apple Pay to the iCard integration team only after all server and network requirements are complete.",
+      "Do not allow production applications or production servers to use the Apple Pay development sandbox gateways.",
+      "Gateway entries permit outbound merchant-server access to Apple Pay. Domain-verification ranges permit Apple to reach a protected merchant domain during registration or verification.",
+      "Recheck the official Apple documentation before changing network policy because Apple maintains the authoritative current list.",
+    ],
+    tables: [
+      table(
+        "Apple Pay Domain Registration Process",
+        ["Step", "Merchant action", "Completion check"],
+        [
+          ["1. Prepare the domain", "Serve every page containing Apple Pay over HTTPS with a valid SSL certificate and TLS 1.2 or later.", "The Apple Pay page and verification path are reachable through HTTPS without certificate errors."],
+          ["2. Configure Apple network access", "Allow outbound HTTPS TCP/443 with SNI to the applicable production or sandbox Apple Pay gateway allowlist. If inbound access is restricted, also allow Apple's domain-verification source ranges.", "The server and protected merchant domain permit the required Apple Pay and domain-verification traffic."],
+          ["3. Send the domain to iCard", "After all server and network requirements are complete, send the exact domain that will display Apple Pay to the iCard integration team.", "iCard has received the correct production or sandbox hostname and can begin Apple Pay domain registration."],
+          ["4. Host the verification file", "Publish the Apple domain-association file provided during the iCard registration process at https://[DOMAIN]/.well-known/apple-developer-merchantid-domain-association without redirects.", "The exact file is publicly retrievable at the required path."],
+          ["5. Complete registration with iCard", "Notify the iCard integration team when the verification file is available and resolve any certificate, path, redirect, or firewall issue identified during verification.", "iCard confirms that the merchant domain is registered and verified for Apple Pay."],
+          ["6. Test merchant validation", "Test Apple Pay merchant validation and the complete payment flow in the intended environment.", "The merchant server establishes an Apple Pay session and the payment flow completes successfully."],
+          ["7. Revalidate before launch", "Check Apple's official server-setup page and repeat the production-hostname test before go-live.", "The current official network requirements are applied and the live merchant-validation flow succeeds."],
+        ]
+      ),
+      table(
+        "Apple Pay TLS Cipher Suites",
+        ["Cipher suite value", "Name"],
+        [
+          ["0x13, 0x01", "TLS_AES_128_GCM_SHA256"],
+          ["0x13, 0x02", "TLS_AES_256_GCM_SHA384"],
+          ["0xC0, 0x2B", "ECDHE-ECDSA-AES128-GCM-SHA256"],
+          ["0xC0, 0x2F", "ECDHE-RSA-AES128-GCM-SHA256"],
+          ["0xC0, 0x2C", "ECDHE-ECDSA-AES256-GCM-SHA384"],
+          ["0xC0, 0x30", "ECDHE-RSA-AES256-GCM-SHA384"],
+        ],
+        "The merchant server must support TLS 1.2 or later and at least one Apple-approved cipher suite."
+      ),
+      table(
+        "Apple Pay Production Gateway Allowlist",
+        ["Region", "Domain", "IP addresses / CIDR blocks"],
+        [
+          [
+            "Global",
+            "apple-pay-gateway.apple.com",
+            "17.171.78.7/32, 17.171.78.71/32, 17.171.78.135/32, 17.171.78.199/32, 17.171.79.12/32, 17.141.128.7/32, 17.141.128.71/32, 17.141.128.135/32, 17.141.128.199/32, 17.141.129.12/32, 17.32.214.7/32, 17.157.96.181/32, 17.33.194.239/32, 17.33.192.38/32, 17.33.193.110/32, 17.33.202.35/32, 17.33.201.101/32, 17.33.200.169/32",
+          ],
+          [
+            "China Region",
+            "cn-apple-pay-gateway.apple.com",
+            "101.230.204.232/32, 101.230.204.242/32, 101.230.204.240/32, 60.29.205.104/32, 60.29.205.106/32, 60.29.205.108/32",
+          ],
+        ],
+        "Production merchant servers connect to these destinations over HTTPS TCP/443 with SNI."
+      ),
+      table(
+        "Apple Pay Development Sandbox Gateway Allowlist",
+        ["Region", "Domain", "IP addresses / CIDR blocks"],
+        [
+          [
+            "Global",
+            "apple-pay-gateway-cert.apple.com",
+            "17.171.85.7/32, 17.179.124.181/32, 17.32.214.56/32, 17.33.194.218/32, 17.33.192.145/32, 17.33.193.45/32, 17.33.200.47/32, 17.33.202.99/32, 17.33.201.105/32",
+          ],
+          ["China Region", "cn-apple-pay-gateway-cert.apple.com", "101.230.204.235/32"],
+        ],
+        "Use these destinations for development and sandbox testing only. Never configure production applications or servers to use them."
+      ),
+      table(
+        "Apple Pay Domain Verification Source Ranges",
+        ["Purpose", "IP range"],
+        [
+          ["Allow Apple to register or verify a protected merchant domain", "17.23.4.96/27"],
+          ["Allow Apple to register or verify a protected merchant domain", "17.23.19.0/27"],
+          ["Allow Apple to register or verify a protected merchant domain", "17.23.24.32/27"],
+          ["Allow Apple to register or verify a protected merchant domain", "17.32.139.128/26"],
+          ["Allow Apple to register or verify a protected merchant domain", "17.132.108.64/26"],
+          ["Allow Apple to register or verify a protected merchant domain", "17.140.126.0/26"],
+          ["Allow Apple to register or verify a protected merchant domain", "17.157.32.0/27"],
+          ["Allow Apple to register or verify a protected merchant domain", "17.157.40.128/27"],
+          ["Allow Apple to register or verify a protected merchant domain", "17.157.44.128/27"],
+          ["Allow Apple to register or verify a protected merchant domain", "17.179.144.128/25"],
+          ["Allow Apple to register or verify a protected merchant domain", "17.253.0.0/16"],
+        ],
+        "These source ranges are relevant when the merchant domain is protected from public access and Apple must retrieve the association file."
+      ),
+    ],
   },
   "ipg-google-pay": {
     title: "Google Pay JS SDK",
@@ -1597,11 +2048,11 @@ Language=EN
 Originator=33
 BannerIndex=1
 MID=000000000000123
-MIDName=My Web Shop
+MIDName=My Shop
 Amount=23.45
 Currency=978
 OrderID=20210916999999
-CardToken=40B1B011C4A21EA6...
+CardToken=<token>
 VerifyCVC=1
 URL_OK=https://site/ok
 URL_Cancel=https://site/cancel
@@ -1614,8 +2065,8 @@ Signature=<base64-signature>`,
     title: "IPGEmbeddedPayment - IPGPurchase",
     subtitle: "API Methods",
     description:
-      "Backend request that obtains a payment URL for embedding as an iframe. The merchant uses the returned URL as the iframe src.",
-    facts: ["PaymentType=IPGPurchase", "Returns iframe URL", "Verify response signature", "Callback has no Signature field"],
+      "Returns an iframe URL for regular card checkout embedded on the merchant page.",
+    facts: ["PaymentType=IPGPurchase", "Theme mandatory", "URL_Notify mandatory", "Signed synchronous response"],
     availability: allBusinessModels,
     fieldSections: [
       { title: "Request Parameters", fields: embeddedPaymentFields },
@@ -1624,51 +2075,48 @@ Signature=<base64-signature>`,
     request: `IPGmethod=IPGEmbeddedPayment
 PaymentType=IPGPurchase
 Theme=Themename
-KeyIndex=1
-KeyIndexResp=1
 IPGVersion=4.5
-Language=EN
-OutputFormat=json
-Originator=100
 MID=000000000000123
+OrderID=47A11480-B3AA-...
 Amount=23.45
 Currency=978
-CustomerIP=127.0.0.1
-OrderID=47A11480-B3AA-...
 URL_Notify=https://site/notify
-Email=customer@site.com
-MobileNumber=+359811222111
 Signature=<base64-signature>`,
-    response: `IPGmethod=IPGEmbeddedPayment
-OrderID=47A11480-...
-Status=0
-StatusMsg=Success
-URL=https://dev-ipg...
-Signature=<base64-signature>`,
+    response: `{
+  "IPGmethod": "IPGEmbeddedPayment",
+  "OrderID": "47A11480-B3AA-...",
+  "Status": "0",
+  "StatusMsg": "Success",
+  "URL": "https://dev-ipg.icards.eu/sandbox/...",
+  "Signature": "uIkMPI...KakY="
+}`,
   },
   "ipg-embedded-stored": {
     title: "IPGEmbeddedPayment - Stored Card",
     subtitle: "API Methods",
     description:
-      "Same as IPGEmbeddedPayment for IPGPurchase, but uses a stored CardToken and handles 3DS verification inline.",
-    facts: ["PaymentType=IPG3DSPurchaseWithStoredCard", "CardToken required", "VerifyCVC optional", "Response same as 5.3"],
+      "Returns an iframe URL for a stored-card 3DS checkout embedded on the merchant page.",
+    facts: ["PaymentType=IPG3DSPurchaseWithStoredCard", "CardToken mandatory", "VerifyCVC optional", "3DS inline"],
     availability: allBusinessModels,
     fieldSections: [
-      { title: "Different Parameters vs IPGPurchase", fields: [
-        f("PaymentType", "IPG3DSPurchaseWithStoredCard", "String", "Mandatory", "Must be IPG3DSPurchaseWithStoredCard."),
-        f("CardToken", "D747458899D...FC43D5", "String", "Mandatory", "Stored card token."),
-        f("VerifyCVC", "1", "N(1)", "Optional", "If 1, customer must enter CVC."),
-      ] },
+      {
+        title: "Additional / changed request fields",
+        fields: [
+          f("PaymentType", "IPG3DSPurchaseWithStoredCard", "String", "Mandatory", "Selects stored-card embedded flow."),
+          f("CardToken", "D747458899D...FC43D5", "String(64)", "Mandatory", "Stored card token."),
+          f("VerifyCVC", "1", "N(1)", "Optional", "If 1, customer enters CVC before payment."),
+        ],
+      },
       { title: "Response Parameters", fields: embeddedResponseFields },
     ],
-    notes: ["All other request parameters are identical to IPGEmbeddedPayment with PaymentType=IPGPurchase."],
+    notes: ["All other fields are the same as IPGEmbeddedPayment with PaymentType=IPGPurchase."],
   },
   "ipg-payment-token-purchase": {
     title: "IPGPaymentToken - IPGPurchase",
     subtitle: "API Methods",
     description:
       "Backend request to obtain a token for the Modal implementation. The merchant loads payment-modal.js with the returned token.",
-    facts: ["ModalType=IPGPurchase", "Token bootstrap", "OutputFormat mandatory", "URL_Notify required"],
+    facts: ["ModalType=IPGPurchase", "Signed synchronous response", "URL_Notify mandatory", "Token response"],
     availability: allBusinessModels,
     fieldSections: [
       { title: "Request Parameters", fields: modalPaymentFields },
@@ -1685,20 +2133,19 @@ Originator=33
 OutputFormat=json
 BannerIndex=1
 MID=000000000000123
-MIDName=My Web Shop
+MIDName=My Shop
 Amount=23.45
 Currency=978
 CustomerIP=127.0.0.1
 OrderID=60EC4A03-...
 Email=customer@site.com
 URL_Notify=https://site/notify
-MobileNumber=+359811222111
 Signature=<base64-signature>`,
     response: `IPGmethod=IPGPaymentToken
 OrderID=60EC4A03-...
 Status=0
 StatusMsg=Success
-Token=_TOKEN_
+Token=<token>
 Signature=<base64-signature>`,
   },
   "ipg-payment-token-stored": {
@@ -1706,14 +2153,17 @@ Signature=<base64-signature>`,
     subtitle: "API Methods",
     description:
       "Same as IPGPaymentToken for IPGPurchase, but uses a stored card token and handles 3DS inline in the modal.",
-    facts: ["ModalType=IPG3DSPurchaseWithStoredCard", "CardToken required", "VerifyCVC optional"],
+    facts: ["ModalType=IPG3DSPurchaseWithStoredCard", "CardToken mandatory", "VerifyCVC optional", "3DS inline"],
     availability: allBusinessModels,
     fieldSections: [
-      { title: "Different Parameters vs IPGPurchase", fields: [
-        f("ModalType", "IPG3DSPurchaseWithStoredCard", "String", "Mandatory", "Must be IPG3DSPurchaseWithStoredCard."),
-        f("CardToken", "40B1B011C4A21EA6...", "String", "Mandatory", "Stored card token."),
-        f("VerifyCVC", "1", "N(1)", "Optional", "If 1, customer confirms CVC."),
-      ] },
+      {
+        title: "Additional / changed request fields",
+        fields: [
+          f("ModalType", "IPG3DSPurchaseWithStoredCard", "String", "Mandatory", "Selects stored-card modal flow."),
+          f("CardToken", "D747458899D...FC43D5", "String(64)", "Mandatory", "Previously stored card token."),
+          f("VerifyCVC", "1", "N(1)", "Optional", "If 1, customer enters CVC before payment."),
+        ],
+      },
       { title: "Response Parameters", fields: paymentTokenResponseFields },
     ],
     resources: [resources.modalWorkflow, resources.modalVisualization],
@@ -1723,235 +2173,163 @@ Signature=<base64-signature>`,
     title: "IPGTokenProviderSession",
     subtitle: "API Methods",
     description:
-      "Initiates an Apple Pay session. The JS SDK sends data to the merchant backend, which sends a signed request to IPG.",
-    facts: ["Apple Pay session", "Browser -> backend -> IPG", "Domain verification required", "Verify before browser response"],
-    availability: allBusinessModels,
+      "Creates the Apple Pay merchant session after the browser sends the Apple validation URL to the merchant backend.",
+    facts: ["Apple Pay only", "Backend call", "ValidationURL", "Session response"],
+    availability: availability(true, true, true),
     fieldSections: [
-      { title: "JS SDK Request (Browser to Merchant Backend)", fields: tokenProviderJsFields },
-      { title: "Backend Request (Merchant Backend to IPG)", fields: tokenProviderBackendFields },
-      { title: "Response", fields: tokenProviderResponseFields },
+      {
+        title: "Request Parameters",
+        fields: [
+          ...commonSignedRequestFields,
+          f("Amount", "10.48", "Double(8,2)", "Mandatory", "Payment amount."),
+          f("MerchantUrl", "dev-ipg.icards.eu", "String", "Mandatory", "Merchant domain."),
+          f("ValidationURL", "https://apple-paygateway...", "String", "Mandatory", "Apple validation URL."),
+          f("DisplayName", "My Store", "String", "Mandatory", "Merchant display name."),
+          f("TokenizedCardProvider", "Apple", "String", "Mandatory", "Fixed value: Apple."),
+          f("CustomerIP", "127.0.0.1", "String", "Mandatory", "Customer IP address."),
+          f("OrderID", "8428E465-95E7-...", "String(50)", "Mandatory", "Unique order identifier."),
+          f("Currency", "978", "N(3)", "Mandatory", "ISO numeric currency code."),
+          f("MID", "000000000000123", "AN(15)", "Mandatory", "Virtual terminal identifier."),
+          f("MIDName", "MyShop", "String", "Mandatory", "Merchant name."),
+          f("Email", "user@site.com", "String", "Mandatory", "Customer email."),
+          f("URL_Notify", "https://site/notify", "String", "Mandatory", "Callback URL."),
+          f("OutputFormat", "json", "String", "Optional", "xml or json."),
+          signatureField,
+        ],
+      },
     ],
-    resources: [resources.walletSdk],
-    media: [media.appleMobileButtons, media.appleSdkRedirect],
-    request: `IPGmethod=IPGTokenProviderSession
-KeyIndex=1
-KeyIndexResp=1
-IPGVersion=4.5
-Originator=33
-OutputFormat=json
-MID=000000000000123
-OrderID=60EC4A03-...
-MerchantUrl=dev-ipg.icards.eu
-ValidationURL=https://apple-paygateway...
-DisplayName=My Store
-TokenizedCardProvider=Apple
-Signature=<base64-signature>`,
-    response: `IPGmethod=IPGTokenProviderSession
-OrderID=F989C51B-...
-Status=0
-StatusMsg=Success
-Session=<apple-pay-session-data>
-Signature=<base64-signature>`,
+    response: `{
+  "IPGmethod": "IPGTokenProviderSession",
+  "OrderID": "8428E465-95E7-...",
+  "Status": "0",
+  "StatusMsg": "Success",
+  "Session": "{...Apple merchant session JSON...}",
+  "Signature": "..."
+}`,
   },
   "ipg-tokenized-card-purchase": {
     title: "IPGTokenizedCardPurchase",
     subtitle: "API Methods",
     description:
-      "Processes a payment using a tokenized card from Apple Pay or Google Pay.",
-    facts: ["Apple Pay", "Google Pay", "TokenizedCardProvider", "Signed backend request"],
-    availability: allBusinessModels,
+      "Completes an Apple Pay or Google Pay purchase using tokenized wallet card data.",
+    facts: ["Apple Pay / Google Pay", "TokenizedCard", "Backend call", "URL_Notify callback"],
+    availability: availability(true, true, true),
     fieldSections: [
-      { title: "JS SDK Request (Browser to Merchant Backend)", fields: tokenizedJsFields },
-      { title: "Backend Request (Merchant Backend to IPG)", fields: tokenizedBackendFields },
-      { title: "Response", fields: tokenizedResponseFields },
+      {
+        title: "Request Parameters",
+        fields: [
+          ...commonSignedRequestFields,
+          f("TokenizedCardProvider", "Google", "String", "Mandatory", "Apple or Google."),
+          f("TokenizedCard", "{...}", "JSON", "Mandatory", "Tokenized card payload received from the wallet."),
+          f("Amount", "10.48", "Double(8,2)", "Mandatory", "Payment amount."),
+          f("CustomerIP", "127.0.0.1", "String", "Mandatory", "Customer IP."),
+          f("OrderID", "8428E465-...", "String(50)", "Mandatory", "Unique order identifier."),
+          f("Currency", "978", "N(3)", "Mandatory", "ISO numeric currency code."),
+          f("MID", "000000000000123", "AN(15)", "Mandatory", "Virtual terminal identifier."),
+          f("MIDName", "MyShop", "String", "Mandatory", "Merchant name."),
+          f("Email", "user@site.com", "String", "Mandatory", "Customer email."),
+          f("URL_Notify", "https://site/notify", "String", "Mandatory", "Callback URL."),
+          f("OutputFormat", "json", "String", "Optional", "xml or json."),
+          signatureField,
+        ],
+      },
     ],
-    resources: [resources.walletSdk],
-    media: [
-      media.appleMobileButtons,
-      media.googleMobileButtons,
-      media.appleSdkRedirect,
-      media.googleSdkRedirect,
-    ],
-    request: `IPGmethod=IPGTokenizedCardPurchase
-KeyIndex=1
-KeyIndexResp=1
-IPGVersion=4.5
-Originator=33
-OutputFormat=json
-MID=000000000000123
-OrderID=60EC4A03-...
-Email=customer@site.com
-CustomerIdentifier=1234
-Amount=10.48
-Currency=978
-URL_Notify=https://site/notify
-TokenizedCardProvider=Apple
-TokenizedCard=<encrypted-card-data>
-Signature=<base64-signature>`,
-    response: `IPGmethod=IPGTokenizedCardPurchase
-OrderID=F989C51B-...
-Status=0
-StatusMsg=Success
-Signature=<base64-signature>`,
   },
-  "ipg-oct": {
-    title: "IPGOCT",
-    subtitle: "Backend Methods",
-    description:
-      "Gaming Withdrawal method. Sends funds to a cardholder card by original transaction reference plus approval, or by stored CardToken.",
-    facts: ["Gaming Withdrawal", "Original Credit Transaction", "TRN+Approval or CardToken", "Server-to-server"],
-    availability: availability(true, false, false),
-    fieldSections: [
-      { title: "Request Parameters", fields: octRequestFields },
-      { title: "Response", fields: octResponseFields },
-    ],
-    request: `IPGmethod=IPGOCT
-KeyIndex=1
-KeyIndexResp=1
-IPGVersion=4.5
-Originator=33
-MID=000000000000123
-OrderID=610F0A8D-7210-...
-IPG_Trnref=20250602110038002328
-Approval=123456
-Amount=23.45
-Currency=978
-RecipientFirstName=John
-RecipientLastName=Smith
-OutputFormat=json
-Signature=<base64-signature>`,
-    response: `IPGmethod=IPGOCT
-OrderID=610F0A8D-...
-IPGTrnref=20250602110038002328
-IPGTrnrefOriginal=20250602110038002328
-Status=0
-StatusMsg=Success
-Signature=<base64-signature>`,
-  },
-  "ipg-funds-disbursement": {
-    title: "IPGFundsDisbursement",
-    subtitle: "Backend Methods",
-    description:
-      "Credit Institution method for granting loans directly to a cardholder card by original transaction reference plus approval, or by stored CardToken.",
-    facts: ["Loan disbursement", "Funds Disbursement", "RRN in response", "OrderID up to 255 chars"],
-    availability: availability(false, true, false),
-    fieldSections: [
-      { title: "Request Parameters", fields: fundsDisbursementRequestFields },
-      { title: "Response", fields: fundsDisbursementResponseFields },
-    ],
-    request: `IPGmethod=IPGFundsDisbursement
-KeyIndex=1
-KeyIndexResp=1
-IPGVersion=4.5
-Originator=33
-MID=000000000000123
-OrderID=610F0A8D-7210-...
-CardToken=40B1B011C4A21EA6...
-Amount=23.45
-Currency=978
-RecipientFirstName=John
-RecipientLastName=Smith
-OutputFormat=json
-Signature=<base64-signature>`,
-    response: `IPGmethod=IPGFundsDisbursement
-OrderID=610F0A8D-...
-IPGTrnref=20250602110038002328
-RRN=602420389981
-Status=0
-StatusMsg=Success
-Signature=<base64-signature>`,
-  },
+  "ipg-oct": createOctDocumentation("4.5"),
+  "ipg-funds-disbursement": createFundsDisbursementDocumentation("4.5"),
   "ipg-refund": {
     title: "IPGRefund",
     subtitle: "Backend Methods",
     description:
-      "Initiates a refund for a previously executed payment in e-commerce scenarios.",
-    facts: ["BM ECommerce only", "Original IPG_Trnref required", "Email required", "Lowercase response fields"],
+      "Refund method for BM ECommerce.",
+    facts: ["BM ECommerce only", "Lower-case response fields", "IPG_Trnref mandatory", "Signature verification"],
     availability: availability(false, false, true),
     fieldSections: [
-      { title: "Request Parameters", fields: refundRequestFields },
-      { title: "Response", fields: refundResponseFields },
+      {
+        title: "Request Parameters",
+        fields: [
+          ...commonSignedRequestFields,
+          f("MID", "000000000000123", "AN(15)", "Mandatory", "Virtual terminal identifier."),
+          f("OrderID", "Refund-001", "String(50)", "Mandatory", "Unique refund order identifier."),
+          f("IPG_Trnref", "20210916123456789012", "String", "Mandatory", "Original transaction reference."),
+          f("Amount", "10.48", "Double(8,2)", "Mandatory", "Refund amount."),
+          f("Currency", "978", "N(3)", "Mandatory", "ISO numeric currency code."),
+          f("Email", "customer@site.com", "String", "Mandatory", "Cardholder email."),
+          f("OutputFormat", "json", "String", "Optional", "xml or json."),
+          signatureField,
+        ],
+      },
     ],
-    request: `IPGmethod=IPGRefund
-KeyIndex=1
-KeyIndexResp=1
-IPGVersion=4.5
-Originator=33
-MID=000000000000123
-OrderID=DB183FF5-8AF8-...
-IPG_Trnref=20250416064251147276
-Amount=23.45
-Currency=978
-Email=customer@site.com
-OutputFormat=json
-Signature=<base64-signature>`,
-    response: `method=IPGRefund
-trnref=20250416064251147276
-amount=1
-currency=978
-status=0
-status_msg=Success
-Signature=<base64-signature>`,
+    response: `{
+  "method": "IPGRefund",
+  "orderid": "Refund-001",
+  "trnref": "...",
+  "trnreforiginal": "...",
+  "amount": "10.48",
+  "currency": "978",
+  "status": "0",
+  "status_msg": "Success",
+  "signature": "..."
+}`,
   },
   "ipg-reversal": {
     title: "IPGReversal",
     subtitle: "Backend Methods",
     description:
-      "Cancels a previously executed payment before settlement. Mandatory for all merchants on all business models.",
-    facts: ["All business models", "Mandatory", "OrderID and MID required in 4.5", "Before settlement"],
+      "Reverses a previously executed payment. Mandatory for all merchants.",
+    facts: ["Mandatory for all merchants", "IPG_Trnref", "OrderID + MID added in 4.5", "Backend response"],
     availability: allBusinessModels,
     fieldSections: [
-      { title: "Request Parameters", fields: reversalRequestFields },
-      { title: "Response", fields: reversalResponseFields },
+      {
+        title: "Request Parameters",
+        fields: [
+          ...commonSignedRequestFields,
+          f("MID", "000000000000123", "AN(15)", "Mandatory", "Virtual terminal identifier."),
+          f("OrderID", "REV-001", "String(50)", "Mandatory", "Unique reversal order identifier."),
+          f("IPG_Trnref", "20210916123456789012", "String", "Mandatory", "Original transaction reference."),
+          f("OutputFormat", "json", "String", "Optional", "xml or json."),
+          signatureField,
+        ],
+      },
     ],
-    request: `IPGmethod=IPGReversal
-KeyIndex=1
-KeyIndexResp=1
-IPGVersion=4.5
-Originator=33
-OutputFormat=json
-OrderID=60EC4A03-0AC1-...
-MID=000000000000123
-IPG_Trnref=20250417083627362872
-Signature=<base64-signature>`,
-    response: `IPGmethod=IPGReversal
-OrderID=F989C51B-...
-IPGTrnref=20250417083627362872
-IPGTrnrefOriginal=20250602110038002328
-Status=0
-StatusMsg=Success
-Signature=<base64-signature>`,
+    response: `{
+  "IPGmethod": "IPGReversal",
+  "OrderID": "REV-001",
+  "Status": "0",
+  "StatusMsg": "Success",
+  "IPGTrnref": "...",
+  "IPGTrnrefOriginal": "...",
+  "Signature": "..."
+}`,
   },
   "ipg-get-status": {
     title: "IPGGetTxnStatus",
     subtitle: "Backend Methods",
     description:
-      "Retrieves the current status of a previously executed backend payment. Can be used for checking the transaction status for IPGOCT / IPGFundsDisbursement",
-    facts: ["BM Gambling", "BM Credit Institution", "Timeout diagnostics", "Not for ECommerce"],
+      "Reference status method for IPGOCT and IPGFundsDisbursement only.",
+    facts: ["IPGOCT", "IPGFundsDisbursement", "Status + IPGTrnStatus", "Not for payment confirmation"],
     availability: availability(true, true, false),
     fieldSections: [
-      { title: "Request Parameters", fields: txnStatusRequestFields },
-      { title: "Response", fields: txnStatusResponseFields },
+      {
+        title: "Request Parameters",
+        fields: [
+          ...commonSignedRequestFields,
+          f("MID", "000000000000123", "AN(15)", "Mandatory", "Virtual terminal identifier."),
+          f("OrderID", "Original-order-id", "String", "Mandatory", "OrderID of the previous IPGOCT or IPGFundsDisbursement."),
+          f("OutputFormat", "json", "String", "Optional", "xml or json."),
+          signatureField,
+        ],
+      },
     ],
-    notes: [
-      "A successful status requires both IPGTrnStatus = 0 and IPGTrnStatusMsg = Transaction completed successful. Do not treat either condition alone as confirmation.",
-    ],
-    request: `IPGmethod=IPGGetTxnStatus
-KeyIndex=1
-KeyIndexResp=1
-IPGVersion=4.5
-Originator=33
-MID=000000000000123
-OrderID=610F0A8D-7210-...
-OutputFormat=json
-Signature=<base64-signature>`,
-    response: `IPGmethod=IPGGetTxnStatus
-Status=0
-StatusMsg=Success
-OrderID=610F0A8D-...
-IPGTrnStatus=0
-IPGTrnStatusMsg=Success
-Signature=<base64-signature>`,
+    response: `{
+  "IPGmethod": "IPGGetTxnStatus",
+  "OrderID": "...",
+  "Status": "0",
+  "StatusMsg": "Success",
+  "IPGTrnStatus": 0,
+  "IPGTrnStatusMsg": "Success",
+  "Signature": "..."
+}`,
   },
   "ipg-business-models": {
     title: "Business Model Differences",
@@ -1963,29 +2341,32 @@ Signature=<base64-signature>`,
   "ipg-feature-matrix": {
     title: "Feature Matrix",
     subtitle: "Business Models",
-    description: "Feature and method support across BM Gambling, BM Credit Institution, and BM ECommerce.",
+    description:
+      "Comparison of integration types and operations supported by each business model.",
     tables: [featureMatrixTable],
   },
   "ipg-payment-availability": {
     title: "Payment Method Availability",
     subtitle: "Business Models",
-    description: "Availability of card, stored-card, Apple Pay, and Google Pay flows by business model.",
+    description:
+      "Payment method support by business model.",
     tables: [paymentAvailabilityTable],
   },
   "ipg-key-field-differences": {
     title: "Key Field Differences",
     subtitle: "Business Models",
-    description: "Important model-specific field and behavior differences in IPG protocol 4.5.",
+    description:
+      "Fields and method details that change depending on the selected business model.",
     tables: [keyFieldDifferencesTable],
   },
   "ipg-protocol-changes": {
     title: "Protocol 4.2 to 4.5 Changes",
     subtitle: "Business Models",
-    description: "Summary of protocol-wide changes introduced in version 4.5.",
+    description:
+      "Key protocol changes that affect migration and implementation.",
     tables: [protocolChangesTable],
   },
 };
-
 const v42SignatureField = f(
   "Signature",
   "Byte[] BASE64",
@@ -2025,6 +2406,11 @@ const v42Differences = [
     description:
       "IPG 4.2 redirects with method-specific data such as IPGPurchaseOK or IPGPurchaseCancel. For payment confirmation, rely on URL_Notify and the OK acknowledgement flow.",
   },
+  {
+    title: "Payment Modal",
+    description:
+      "IPG 4.2 Payment Modal keeps the customer on the merchant page, starts with IPGPaymentTokenRequest, loads payment-modal.js with the verified token, and exposes modal frontend events. It is not the Redirect checkout flow.",
+  },
 ];
 
 const v42DataTypesTable = table(
@@ -2054,6 +2440,8 @@ const v42MethodInventoryTable = table(
     ["Merchant to IPG", "IPG3DSPurchaseWithStoredCard", "Stored-card purchase with 3DS verification."],
     ["Merchant to IPG", "IPGFirstRecurring", "First transaction in a recurring subscription agreement."],
     ["Merchant to IPG", "IPGSubsequentRecurring", "Subsequent recurring transaction after the initial agreement."],
+    ["Merchant to IPG", "IPGOCT", "Gambling-model Original Credit Transaction for gaming withdrawals."],
+    ["Merchant to IPG", "IPGFundsDisbursement", "Financial Institution-model disbursement to a cardholder card."],
     ["Merchant to IPG", "IPGReversal", "Cancels a previously executed payment."],
     ["Merchant to IPG", "IPGRefund", "Credits the cardholder for a previous payment."],
     ["Merchant to IPG", "IPGGetTxnStatus", "Returns status and parameters for a previously executed payment."],
@@ -2340,18 +2728,38 @@ const v42PaymentTokenFields = [
   f("Token / Cardtoken", "D747458899D...", "String", "Conditional", "For modal IPG3DSPurchaseWithStoredCard, the saved-card parameter is Cardtoken instead of Token."),
   v42SignatureField,
 ];
+const v42PaymentTokenResponseFields = [
+  r("method", "IPGPaymentToken", "String", "Response method name."),
+  r("status", "0", "String", "Request status. Continue only after a successful response."),
+  r("status_msg", "Success", "String", "Status description."),
+  r("token", "_TOKEN_", "String", "Short-lived token used to load payment-modal.js for the prepared transaction."),
+  r("Signature", "Byte[] BASE64", "BASE64", "Response signature. Verify before using token."),
+];
+const v42ModalTypesTable = table(
+  "Supported IPG 4.2 Modal Types",
+  ["ModalType", "Customer journey", "Additional implementation rule"],
+  [
+    ["IPGPurchase", "Regular card payment inside the modal.", "Send all parameters required by IPGPurchase, except URL_OK and URL_Cancel are not required for IPGPaymentTokenRequest."],
+    ["IPGFirstRecurring", "First customer-present payment of a subscription agreement inside the modal.", "Send all parameters required by IPGFirstRecurring and preserve the successful transaction reference for later recurring payments."],
+    ["IPGStoreCard", "Card-storage and verification experience inside the modal.", "Process the signed store-card notification before saving Token for later use."],
+    ["IPG3DSPurchaseWithStoredCard", "Stored-card payment with inline customer verification.", "Use Cardtoken instead of Token in the modal token request and include VerifyCVC when required."],
+  ]
+);
 
 const v42Content = {
   ...ipgContent,
+  "ipg-oct": createOctDocumentation("4.2"),
+  "ipg-funds-disbursement": createFundsDisbursementDocumentation("4.2"),
   "ipg-overview": {
     title: "IPG API 4.2",
     subtitle: "Overview & Architecture",
     description:
       "Complete integration reference for IPG protocol 4.2 across BM Gambling, BM Credit Institution, and BM ECommerce.",
-    facts: ["Protocol 4.2", "HTTPS", "POST notifications", "Token stored-card flows"],
+    facts: ["Protocol 4.2", "All business models", "Complete method inventory", "POST notifications"],
     body: [
       "The 4.2 flow starts from the merchant checkout page. The merchant posts an IPGPurchase request, redirects the browser to IPG, IPG handles card entry, 3DS, and scheme processing, then posts the result to the merchant and redirects the customer to the checkout result page.",
       "This version uses method-based IPG-to-Merchant notifications. For URL_Notify calls, the merchant must return HTTP 200 and body OK.",
+      "The All business models overview includes the complete combined 4.2 method inventory. Specialized methods remain marked by business model: IPGOCT for Gambling and IPGFundsDisbursement for Financial Institution.",
       "The 4.2 PDF does not use the same modern wallet-tokenized and embedded-checkout method set as 4.5. Those differences are kept in the right-side differences column and the version summary.",
     ],
     tables: [v42TransmissionTable, v42MethodInventoryTable],
@@ -2656,24 +3064,64 @@ Signature=<base64-signature>`,
     title: "IPG Payment Modal",
     subtitle: "Implementation Types",
     description:
-      "IPG 4.2 Payment Modal lets customers make payments without leaving the merchant web page.",
-    facts: ["IPGPaymentTokenRequest", "payment-modal.js", "classic or dark theme", "URL_Notify result"],
+      "IPG Payment Modal securely collects and processes payment data in an overlay while the customer remains on the merchant page.",
+    facts: ["No browser redirect", "Backend IPGPaymentToken request", "IPG-controlled overlay", "Modal frontend events"],
     body: [
-      "The merchant first sends a back-end Payment Token Request. The response token is then used to load payment-modal.js on the merchant page.",
-      "The wrapper element must have id=\"ipg\". The script URL uses _DOMAIN_, _TOKEN_, and _THEME_ placeholders.",
-      "After successful payment, the merchant receives an asynchronous request on URL_Notify with the details supplied in the Payment Token request.",
+      "Payment Modal is a separate implementation from Redirect checkout. The browser remains on the merchant website while payment-modal.js opens an IPG-controlled overlay above the page.",
+      "Before opening the overlay, the merchant backend sends a signed IPGPaymentToken request containing the complete transaction data and selected ModalType. The backend verifies the synchronous response and returns only the verified short-lived token to the frontend.",
+      "The frontend creates the required element with id=\"ipg\", loads payment-modal.js from the correct environment, and supplies the verified token and classic or dark theme.",
+      "Modal frontend events control loading, cancellation, closing, success, and error experiences. They are not financial confirmation. The merchant backend must verify and process the asynchronous URL_Notify message before marking the order paid.",
     ],
-    request: `<div id="ipg"></div>
+    tables: [
+      modalImplementationFlowTable,
+      v42ModalTypesTable,
+      modalConfigurationTable,
+      modalFrontendEventsTable,
+    ],
+    fieldSections: [
+      { title: "Payment Token Request Controls", fields: v42PaymentTokenFields },
+      { title: "Payment Token Response", fields: v42PaymentTokenResponseFields },
+    ],
+    examplesTitle: "Payment Modal Implementation",
+    examples: [
+      {
+        title: "1. Backend Token Request",
+        description: "Create and sign the modal transaction on the merchant backend.",
+        code: `IPGmethod=IPGPaymentToken
+ModalType=IPGPurchase
+IPGVersion=4.2
+MID=000000000000123
+OrderID=<unique-order-id>
+Amount=23.45
+Currency=978
+URL_Notify=https://merchant.example/ipg/notify
+OutputFormat=json
+Signature=<base64-signature>`,
+      },
+      {
+        title: "2. Required Wrapper and Script",
+        description: "Load the overlay with the verified token returned by the backend.",
+        code: `<div id="ipg"></div>
 <script>
-function loadModal() {
-  const src = _DOMAIN_ + "js/payment-modal.js?token=" + _TOKEN_ + "&theme=" + _THEME_;
+function loadModal(domain, token, theme = "classic") {
   const script = document.createElement("script");
-  script.src = src;
+  script.src = domain + "js/payment-modal.js?token=" + encodeURIComponent(token) + "&theme=" + theme;
   script.id = "ipg-io-js";
-  script.async = "async";
-  document.querySelector("body").appendChild(script);
+  script.async = true;
+  document.body.appendChild(script);
 }
 </script>`,
+      },
+      {
+        title: "3. Modal Event Handling",
+        description: "Use modal events for customer experience while awaiting URL_Notify.",
+        code: `window.addEventListener("ipg.formload.success", () => hideLoadingState());
+window.addEventListener("ipg.user.cancel", () => keepOrderUnpaid());
+window.addEventListener("ipg.payment.success", () => showProcessingState());
+window.addEventListener("ipg.payment.error", () => showRetryOptions());
+window.addEventListener("ipg.loadmodal.error", () => showAlternativePaymentMethods());`,
+      },
+    ],
     differences: [v42Differences[6]],
   },
   "ipg-purchase": {
@@ -2895,6 +3343,7 @@ const v42Menu = [
     items: [
       { id: "ipg-redirect-overview", label: "Redirect checkout", type: "guide" },
       { id: "ipg-modal-overview", label: "Payment Modal", type: "guide" },
+      { id: "ipg-apple-domain", label: "Apple Pay domain registration", type: "guide" },
     ],
   },
   {
@@ -2913,6 +3362,8 @@ const v42Menu = [
   {
     title: "Backend Methods",
     items: [
+      { id: "ipg-oct", label: "IPGOCT", type: "post" },
+      { id: "ipg-funds-disbursement", label: "IPGFundsDisbursement", type: "post" },
       { id: "ipg-reversal", label: "IPGReversal", type: "post" },
       { id: "ipg-refund", label: "IPGRefund", type: "post" },
       { id: "ipg-get-status", label: "IPGGetTxnStatus", type: "post" },
@@ -2963,6 +3414,7 @@ const v42ImplementationTypesGroup = {
   items: [
     { id: "ipg-redirect-overview", label: "Redirect checkout", type: "guide" },
     { id: "ipg-modal-overview", label: "Payment Modal", type: "guide" },
+    { id: "ipg-apple-domain", label: "Apple Pay domain registration", type: "guide" },
   ],
 };
 
@@ -2985,7 +3437,7 @@ const v42GamblingFunctionScopeTable = table(
     ["IPGPurchaseWithStoredCard", "Optional merchant-initiated stored-card payment.", "Back-end flow with encrypted Token and IPG_Trnref."],
     ["IPG3DSPurchaseWithStoredCard", "Optional customer-facing stored-card payment with 3DS.", "Uses URL_OK, URL_Cancel, and URL_Notify."],
     ["IPGPaymentTokenRequest", "Optional Payment Modal presentation.", "The 4.2 PDF documents Payment Modal, not IPGEmbeddedPayment."],
-    ["IPGOCT", "Gaming withdrawal / Original Credit Transaction.", "Use the same method structure as the IPGOCT page in the 4.5 Gambling documentation."],
+    ["IPGOCT", "Gaming withdrawal / Original Credit Transaction.", "Two request paths are shown: OCT by PAN using documented CardToken, or OCT by original IPG_Trnref plus Approval. Both send IPGmethod=IPGOCT."],
     ["IPGReversal", "Required where a previous payment must be voided.", "Mandatory integration method in the 4.2 PDF."],
     ["IPGGetTxnStatus", "Reference status check for previous backend transactions.", "Recommended for OCT status/reference checks. Do not use it as the primary approval signal."],
     ["IPGRefund", "Not included in the focused Gambling 4.2 menu.", "Use the All business models view if a merchant setup explicitly requires it."],
@@ -3108,6 +3560,7 @@ const v42EcommerceMenu = [
 
 const v42GamblingContent = {
   ...v42Content,
+  "ipg-oct": createOctDocumentation("4.2"),
   "ipg-gambling-overview": {
     title: "IPG 4.2 - Gambling Business Model",
     subtitle: "Business Model",
@@ -3116,7 +3569,7 @@ const v42GamblingContent = {
     facts: ["Protocol 4.2", "BM Gambling", "Redirect deposits", "IPGOCT withdrawals"],
     body: [
       "This view keeps the shared 4.2 settings, signature rules, HTTP POST format, and notification handling, then filters the method list to the functions normally relevant to Gambling deposits and payment maintenance.",
-      "The provided 4.2 PDF does not include the later wallet-tokenized APIs or IPGEmbeddedPayment. IPGOCT is included here with the same method structure used in the 4.5 Gambling documentation.",
+      "The provided 4.2 PDF does not include the later wallet-tokenized APIs or IPGEmbeddedPayment. The IPGOCT screen uses the shared documented Gambling OCT contract with separate PAN/CardToken and TRN plus Approval paths.",
       "For payment outcome handling, use URL_Notify notifications and return HTTP 200 with body OK.",
     ],
     tables: [v42GamblingFunctionScopeTable, v42CompatibilityTable],
@@ -3238,6 +3691,7 @@ const modelImplementationTypesGroup = {
     { id: "ipg-modal-overview", label: "Modal implementation", type: "guide" },
     { id: "ipg-wallet-overview", label: "Wallet JS SDK overview", type: "guide" },
     { id: "ipg-apple-pay", label: "Apple Pay JS SDK", type: "guide" },
+    { id: "ipg-apple-domain", label: "Apple Pay domain registration", type: "guide" },
     { id: "ipg-google-pay", label: "Google Pay JS SDK", type: "guide" },
     { id: "ipg-wallet-sdk", label: "JS SDK setup", type: "guide" },
   ],
@@ -3643,6 +4097,768 @@ const ecommerceContent = {
   },
 };
 
+const detailItem = (title, description) => ({ title, description });
+const detailSection = (title, description, items) => ({ title, description, items });
+
+const shared42DetailSections = {
+  general: [
+    detailSection(
+      "How IPG 4.2 Fits the Merchant Integration",
+      "IPG 4.2 separates the customer-facing checkout journey from the merchant's signed backend processing.",
+      [
+        detailItem("Merchant responsibility", "The merchant creates signed HTTP POST requests, redirects or presents the checkout, stores OrderID before sending, verifies every signed IPG message, and updates its own order state."),
+        detailItem("IPG responsibility", "IPG validates the MID, currency, signature, and request parameters; presents the payment experience; performs 3DS and card-scheme processing; and sends the documented notification methods."),
+        detailItem("Unique request identity", "For customer-facing methods, MID together with OrderID identifies the merchant request. IPG rejects duplicated transmissions, so generate and persist a unique OrderID before the first attempt."),
+        detailItem("Authoritative payment completion", "A payment is successful only after the card response succeeds, IPG posts the appropriate method to URL_Notify, and the merchant returns HTTP 200 with the exact response body OK."),
+      ]
+    ),
+    detailSection(
+      "IPG 4.2 Operational Readiness",
+      "Prepare the integration so retries, notifications, and later back-office operations remain traceable.",
+      [
+        detailItem("Separate environments", "Keep Sandbox and Production endpoints, MIDs, Originator values, RSA keys, URLs, and credentials separate. Never use a Sandbox key or MID in Production."),
+        detailItem("Persist references", "Store OrderID, MID, Amount, Currency, Approval, IPG_Trnref, notification method, transaction status, and timestamps. These values are needed for support, reversal, refund, recurring, and reconciliation flows."),
+        detailItem("Idempotent notification handling", "The URL_Notify endpoint must safely accept repeated or delayed messages without fulfilling, storing, refunding, or reversing the same business event twice."),
+        detailItem("Protect sensitive data", "Do not log private keys, unmasked card data, or reusable stored-card tokens. Restrict Token access and associate each token with the correct authenticated merchant customer."),
+      ]
+    ),
+  ],
+  security: [
+    detailSection(
+      "IPG 4.2 Signature Implementation",
+      "Every request and incoming IPG message must be signed or verified using the 4.2 value-concatenation algorithm.",
+      [
+        detailItem("Build the source values", "Remove Signature completely and keep the remaining values in the exact POST-data order used for the message. IPG 4.2 signs values only, without field names or separators."),
+        detailItem("Encode and sign", "Concatenate the values, encode the complete UTF-8 string to Base64, sign that Base64 string with RSA SHA-256 and the sender's private key, then Base64 encode the binary signature."),
+        detailItem("Append Signature last", "Add Signature only after it has been calculated. Signature must be the final POST parameter because it is not part of the signed source values."),
+        detailItem("Verify before processing", "Extract and remove Signature, rebuild the Base64 source string using the received value order, and verify it with the configured iCard public key before changing merchant state."),
+      ]
+    ),
+    detailSection(
+      "Common IPG 4.2 Signature Failures",
+      "Small ordering or encoding differences produce a different signed value.",
+      [
+        detailItem("Changed value order", "Do not sort values and do not rebuild them from an unordered map. Preserve the exact message order used by the sender."),
+        detailItem("Field names or separators included", "The 4.2 source string contains concatenated values only. Do not add parameter names, ampersands, semicolons, colons, or spaces."),
+        detailItem("Missing Base64 stage", "Sign the Base64 representation of the concatenated UTF-8 string, not the raw concatenated string."),
+        detailItem("Wrong key selection", "Check KeyIndex, KeyIndexResp, environment, merchant private key, and iCard public key when verification fails."),
+      ]
+    ),
+  ],
+  callbacks: [
+    detailSection(
+      "IPG 4.2 Notification Pipeline",
+      "Process method-based IPG-to-Merchant POST messages through one controlled URL_Notify pipeline.",
+      [
+        detailItem("1. Accept and identify", "Accept the POST at the exact URL_Notify sent in the initiating request and identify the event from IPGmethod, such as IPGPurchaseNotify, IPGPurchaseDeclineNotify, or IPGPurchaseRollback."),
+        detailItem("2. Verify and correlate", "Verify Signature with the iCard public key, then correlate MID, OrderID, Amount, Currency, and available IPG transaction references with the stored merchant order."),
+        detailItem("3. Apply idempotently", "Persist the notification and update merchant state exactly once. A browser redirect method must never override a verified backend notification."),
+        detailItem("4. Acknowledge exactly", "Return HTTP status 200 and a body containing only OK after the message is verified and durably accepted. Any other status or response body is treated as an error."),
+      ]
+    ),
+    detailSection(
+      "Notification and Redirect Method Roles",
+      "The same customer journey can produce backend notification methods and browser redirect methods with different purposes.",
+      [
+        detailItem("Notify methods", "Methods ending in Notify are posted to URL_Notify and are the reliable server-to-server path for successful or declined processing."),
+        detailItem("OK methods", "Methods ending in OK are sent when IPG redirects the customer browser to URL_OK after the required successful notification acknowledgement."),
+        detailItem("Cancel methods", "Methods ending in Cancel are sent to URL_Cancel when the customer cancels. Treat cancellation as a customer-experience event, not proof of an approved payment."),
+        detailItem("Rollback method", "IPGPurchaseRollback means IPG reversed an earlier successful authorization because it did not receive the required OK acknowledgement. Mark the order as not paid even if IPGPurchaseNotify was previously received."),
+      ]
+    ),
+  ],
+  implementation: [
+    detailSection(
+      "IPG 4.2 Implementation Responsibilities",
+      "Choose between the documented Redirect and Payment Modal experiences while keeping final processing on the merchant backend.",
+      [
+        detailItem("Merchant frontend", "Initiates the redirect or loads the modal, presents customer-facing success or cancellation state, and must not decide the final financial result by itself."),
+        detailItem("Merchant backend", "Creates ordered and signed POST requests, obtains modal tokens, receives URL_Notify messages, verifies signatures, returns the exact acknowledgement, and updates orders."),
+        detailItem("IPG checkout", "Collects card information, handles 3DS and card-scheme processing, and sends method-based result notifications and redirects."),
+        detailItem("Final-result rule", "Whether using Redirect or Modal, rely on verified URL_Notify processing and the required OK acknowledgement for final merchant state."),
+      ]
+    ),
+    detailSection(
+      "Choosing the 4.2 Presentation",
+      "Use the presentation that matches the required customer experience and supported method.",
+      [
+        detailItem("Redirect checkout", "Use Redirect for the standard hosted experience. The browser leaves the merchant page, completes the flow at IPG, and returns to URL_OK or URL_Cancel."),
+        detailItem("Payment Modal", "Use Payment Modal when the checkout should appear without leaving the merchant page. First obtain a token through IPGPaymentToken, then load payment-modal.js."),
+        detailItem("Supported modal types", "The 4.2 guide documents IPGPurchase, IPGFirstRecurring, IPGStoreCard, and IPG3DSPurchaseWithStoredCard as ModalType values."),
+        detailItem("No 4.2 embedded API", "The supplied 4.2 guide documents Payment Modal rather than the later IPGEmbeddedPayment method. Do not assume 4.5 implementation APIs are available in 4.2."),
+      ]
+    ),
+  ],
+  methods: [
+    detailSection(
+      "Common IPG 4.2 Method Lifecycle",
+      "Apply this lifecycle to each 4.2 API or backend method.",
+      [
+        detailItem("Prepare and validate", "Select the correct method, confirm it is enabled for the MID, validate required values and currency, create a unique OrderID where applicable, and persist the request context."),
+        detailItem("Build and sign in order", "Create the form-encoded POST in deterministic parameter order, calculate the 4.2 value-only signature without Signature, append Signature last, and send to the correct environment."),
+        detailItem("Verify every result", "Verify signatures on synchronous responses, URL_Notify methods, and browser redirect methods before using any returned status, Token, Approval, or IPG_Trnref."),
+        detailItem("Complete the business action", "For customer-facing methods, wait for the verified URL_Notify flow and return exact OK. For backend methods, use the verified synchronous response and preserve transaction references."),
+      ]
+    ),
+    detailSection(
+      "Validation, Error, and Timeout Handling",
+      "Avoid duplicate payments and ambiguous merchant state.",
+      [
+        detailItem("Invalid request", "Correct missing or invalid parameters, preserve the intended business reference, rebuild the full ordered POST, and generate a new signature before retrying."),
+        detailItem("Duplicate request", "IPG rejects duplicate MID and OrderID combinations. Investigate the original attempt rather than generating uncontrolled retries with the same identifier."),
+        detailItem("Lost or uncertain result", "Do not treat an HTTP transport result as payment approval. Check received notifications and use IPGGetTxnStatus only as the documented reference check."),
+        detailItem("Back-office recovery", "Use IPGReversal for a previously executed payment that must be voided and IPGRefund only for an approved refund use case. Preserve the original IPG_Trnref."),
+      ]
+    ),
+  ],
+  models: [
+    detailSection(
+      "IPG 4.2 Business-Model Scope",
+      "The supplied 4.2 guide is organized around e-commerce payment functions; focused screens keep the website structure while limiting visible methods.",
+      [
+        detailItem("E-commerce", "Uses the complete documented 4.2 purchase, store-card, stored-card, recurring, modal, reversal, refund, and status method set where enabled."),
+        detailItem("Gambling", "Uses the applicable shared 4.2 deposit and maintenance flows plus IPGOCT where enabled by iCard for the merchant setup."),
+        detailItem("Financial Institution", "Uses applicable shared 4.2 payment and maintenance flows plus IPGFundsDisbursement where enabled by iCard for the merchant setup."),
+        detailItem("Confirm enabled scope", "Do not infer method availability from another business model. Confirm every required method, MID, currency, and test scenario with the iCard integration team."),
+      ]
+    ),
+  ],
+};
+
+const method42DetailSections = {
+  "ipg-purchase": [
+    detailSection("IPGPurchase Usage and Processing", "IPGPurchase starts the standard customer-present checkout flow.", [
+      detailItem("When to use", "Use when the cardholder is actively paying through the IPG hosted checkout page."),
+      detailItem("Request validation", "IPG checks the MID, the currency against that MID, the signature and fields, and the uniqueness of MID plus OrderID."),
+      detailItem("Cart handling", "Cart and CartItems are mandatory in the 4.2 guide. Include every product and any additional fee or tax as a separate indexed cart item, and keep cart currency equal to the purchase currency."),
+      detailItem("Store-card option", "Where enabled for the merchant model, checkout may display a Store Card checkbox selected by default. If the customer stores the card, Token is returned in IPGPurchaseNotify."),
+      detailItem("Success handling", "Process verified IPGPurchaseNotify, store Approval and IPG_Trnref, commit the order idempotently, and return exact OK. URL_OK is a browser transition after that acknowledgement."),
+    ]),
+  ],
+  "ipg-v42-store-card": [
+    detailSection("IPGStoreCard Usage and Processing", "IPGStoreCard verifies and saves a card for later use.", [
+      detailItem("When to use", "Use only when the merchant offers a clear stored-card capability and has the required customer consent and merchant-side account relationship."),
+      detailItem("Verification transaction", "IPG sends a zero-amount verification transaction. A successful verification produces IPGStoreCardNotify and, after exact OK acknowledgement, IPGStoreCardOK."),
+      detailItem("Token handling", "Persist Token only after the signed notification is verified. Treat it as a reusable payment credential, restrict access, and bind it to the correct customer."),
+      detailItem("Cancellation or decline", "IPGStoreCardCancel means the customer canceled and no card is saved. IPGStoreCardDeclineNotify reports a declined verification and includes transaction status details."),
+    ]),
+  ],
+  "ipg-v42-get-stored-card-data": [
+    detailSection("Stored-Card Data Lookup", "IPGGetStoredCardData retrieves card information for a previously stored card.", [
+      detailItem("Backend-only method", "Call this method from the trusted merchant backend; never expose private keys or the stored Token to browser code."),
+      detailItem("Token encryption", "Encrypt the stored Token with the iCard public key using PKCS1 padding before placing it in the request."),
+      detailItem("Reference requirement", "Use only a Token obtained from a previous verified store-card flow and authorized for the current merchant customer."),
+      detailItem("Response handling", "Select XML or JSON through OutputFormat, verify the signed response, and expose only the minimum masked information required by the merchant experience."),
+    ]),
+  ],
+  "ipg-v42-purchase-with-stored-card": [
+    detailSection("Merchant-Initiated Stored-Card Purchase", "IPGPurchaseWithStoredCard performs a backend payment using a previously stored card.", [
+      detailItem("When to use", "Use for the documented merchant-initiated or subscription scenario, not for an untrusted browser request."),
+      detailItem("Required references", "Send the authorized encrypted Token and IPG_Trnref from the first or previous related transaction together with a unique merchant OrderID."),
+      detailItem("No blind retry", "Because this is a financial backend operation, investigate an uncertain result before retrying. Preserve the original request and all returned references."),
+      detailItem("Successful response", "Verify Signature and treat the response as successful only when the documented response status indicates success and the successful IPG_Trnref and Approval values are present."),
+    ]),
+  ],
+  "ipg-3ds-stored": [
+    detailSection("3DS Stored-Card Purchase", "IPG3DSPurchaseWithStoredCard performs a customer-present stored-card payment with 3DS verification.", [
+      detailItem("Customer interaction", "Open the required new tab or window and redirect the cardholder to the issuer ACS when 3DS verification is required."),
+      detailItem("Token and CVC", "Encrypt Token with the iCard public key using PKCS1 padding. Set VerifyCVC=1 only when the customer must confirm CVC before proceeding."),
+      detailItem("Notification flow", "Process IPG3DSPurchaseWithStoredCardNotify at URL_Notify, verify it, commit idempotently, and return exact OK before relying on the subsequent URL_OK redirect."),
+      detailItem("Decline and cancel", "Use the dedicated decline notification for backend decline state and the cancel redirect for customer-facing cancellation. Consult IPGGetTxnStatus codes when provided."),
+    ]),
+  ],
+  "ipg-v42-first-recurring": [
+    detailSection("First Recurring Transaction", "IPGFirstRecurring establishes the initial customer-present transaction for a subscription agreement.", [
+      detailItem("When to use", "Use when the customer is actively creating the recurring agreement and completing the first payment."),
+      detailItem("Customer data", "Provide the documented customer contact and billing data and a unique OrderID that identifies the agreement or first payment."),
+      detailItem("Result methods", "The guide uses the same IPGPurchase notification, OK, Cancel, Rollback, and DeclineNotify method family for the first recurring transaction."),
+      detailItem("Reference preservation", "After verified success, preserve IPG_Trnref as the reference required by later IPGSubsequentRecurring requests."),
+    ]),
+  ],
+  "ipg-v42-subsequent-recurring": [
+    detailSection("Subsequent Recurring Transaction", "IPGSubsequentRecurring performs a merchant-initiated backend payment after the initial recurring agreement.", [
+      detailItem("When to use", "Use only under the established recurring agreement and according to the merchant's customer authorization and billing schedule."),
+      detailItem("Original reference", "Send the IPG_Trnref of the first recurring transaction so IPG can associate the subsequent payment with the subscription."),
+      detailItem("Backend controls", "Validate the subscription state, amount, currency, billing date, and duplicate protection before signing and sending the request."),
+      detailItem("Response handling", "Verify Signature, preserve trnreforiginal and trnref, and use the documented status and status_msg fields to update billing and reconciliation records."),
+    ]),
+  ],
+  "ipg-payment-token-purchase": [
+    detailSection("Payment Modal Token Request", "IPGPaymentToken is the backend bootstrap request for the 4.2 Payment Modal.", [
+      detailItem("Choose ModalType", "Select IPGPurchase, IPGFirstRecurring, IPGStoreCard, or IPG3DSPurchaseWithStoredCard and include the required parameters of that original method."),
+      detailItem("URL differences", "URL_OK and URL_Cancel are not required in IPGPaymentTokenRequest, but URL_Notify remains necessary for the asynchronous result."),
+      detailItem("Stored-card modal naming", "For ModalType=IPG3DSPurchaseWithStoredCard, the saved-card parameter is Cardtoken rather than Token."),
+      detailItem("Use the response token once", "Verify the synchronous response, then use its token to load payment-modal.js for the intended order and environment."),
+    ]),
+  ],
+  "ipg-reversal": [
+    detailSection("IPGReversal Usage and Processing", "IPGReversal voids a previously executed payment and is mandatory for all 4.2 merchant integrations.", [
+      detailItem("When to use", "Use for a documented void or recovery case where the earlier payment must be reversed."),
+      detailItem("Transaction reference", "Send the exact original IPG_Trnref. Do not select a transaction from browser state or an unverified notification."),
+      detailItem("Output format", "The 4.2 guide marks OutputFormat as mandatory for this method; send xml or json and parse the chosen format exactly."),
+      detailItem("Merchant state", "Verify the signed response, persist the result, and update the order and reconciliation state idempotently."),
+    ]),
+  ],
+  "ipg-refund": [
+    detailSection("IPGRefund Usage and Processing", "IPGRefund credits funds for a previously executed payment.", [
+      detailItem("When to use", "Use only after the merchant has approved the refund and identified the correct original transaction."),
+      detailItem("Validate the refund", "Check MID, original IPG_Trnref, refund OrderID, amount, currency, and customer email before signing the request."),
+      detailItem("Partial and repeat protection", "Track cumulative refunded amounts and merchant authorization so repeated operator actions or retries cannot exceed the intended refund."),
+      detailItem("Response handling", "Verify Signature and persist the returned trnref, amount, currency, status, and status_msg for customer support and reconciliation."),
+    ]),
+  ],
+  "ipg-get-status": [
+    detailSection("IPGGetTxnStatus Interpretation", "IPGGetTxnStatus is a reference lookup and must not replace the normal notification flow.", [
+      detailItem("When to use", "Use from the merchant backend to investigate a previously submitted OrderID after an uncertain or missing result."),
+      detailItem("Approval rule", "Do not treat the lookup alone as the original approval signal. The guide defines success through successful card processing plus URL_Notify and exact OK acknowledgement."),
+      detailItem("Important statuses", "100 means completed successfully after acknowledgement; 97 means reversed because the notification was not acknowledged; 98 is an intermediate missing-capture state; 99 means not found."),
+      detailItem("Operational decision", "Use the verified result to investigate, wait, reconcile, or follow the documented recovery flow. Do not blindly repeat the original payment."),
+    ]),
+  ],
+  "ipg-oct": [
+    detailSection("IPGOCT Usage and Processing", "IPGOCT is the Gambling backend method for processing an Original Credit Transaction gaming withdrawal.", [
+      detailItem("Correct method", "Every OCT request must send IPGmethod=IPGOCT. Do not reuse an IPGPurchase request bundle or include customer-facing purchase callback fields."),
+      detailItem("OCT by PAN path", "Use CardToken as the documented card-destination reference and omit IPG_Trnref and Approval. The supplied method table does not define a raw PAN request property."),
+      detailItem("TRN and Approval path", "Send both IPG_Trnref and Approval from the previously executed payment and omit CardToken."),
+      detailItem("Shared validation", "For either path, send the valid MID, unique OrderID, amount, MID currency, valid recipient names, optional OutputFormat, and Signature as the last POST parameter."),
+      detailItem("Response handling", "Verify Signature before using Status, StatusMsg, IPGTrnref, or IPGTrnrefOriginal. IPGTrnrefOriginal is available for OCT by TRN and Approval."),
+      detailItem("Timeout handling", "Use IPGGetTxnStatus only when an OCT result is uncertain or timed out; do not blindly send another withdrawal."),
+    ]),
+  ],
+  "ipg-funds-disbursement": [
+    detailSection("IPGFundsDisbursement in a 4.2-Focused Integration", "This method is exposed only for the focused Financial Institution scope where it is enabled by iCard.", [
+      detailItem("Confirm availability", "IPGFundsDisbursement is not defined in the supplied 4.2 e-commerce guide. Confirm the exact enabled request contract, response fields, and certification scenarios with iCard."),
+      detailItem("Merchant controls", "Validate the approved disbursement decision, recipient, amount, currency, destination-card relationship, and duplicate protection."),
+      detailItem("Uncertain outcome", "Preserve OrderID and transaction references and follow the agreed status and recovery procedure before retrying."),
+      detailItem("Auditability", "Record authorization, execution, response, exception handling, and reconciliation details for every disbursement."),
+    ]),
+  ],
+};
+
+const section42DetailSections = {
+  "ipg-overview": [
+    detailSection("End-to-End IPG 4.2 Flow", "The standard flow moves from merchant initiation to IPG checkout, backend notification, and customer return.", [
+      detailItem("1. Initiate", "The customer chooses to pay and the merchant backend creates a signed request with a persisted unique OrderID."),
+      detailItem("2. Redirect or present", "The browser is redirected to IPG or the merchant opens the Payment Modal using a verified token."),
+      detailItem("3. Process", "IPG collects payment data, performs 3DS and financial messaging, and determines the processing result."),
+      detailItem("4. Notify and acknowledge", "IPG posts the result method to URL_Notify. The merchant verifies it, updates state idempotently, and returns HTTP 200 with body OK."),
+      detailItem("5. Return the customer", "After successful acknowledgement, IPG redirects the browser to URL_OK; cancellation flows return through URL_Cancel."),
+    ]),
+  ],
+  "ipg-integration-steps": [
+    detailSection("IPG 4.2 Certification Journey", "Follow the integration and testing process described in the 4.2 guide.", [
+      detailItem("Technical scope meeting", "Agree the required methods, Sandbox settings, business behavior, and support channel with the iCard integration team."),
+      detailItem("Sandbox implementation", "Use the provided Sandbox kit, execute the method-specific test scenario, record TRNs and OrderIDs, and return the completed scenario for iCard QA review."),
+      detailItem("Production validation", "After Sandbox approval, use the Production kit and Production test scenario. The MID remains restricted until the next-day clearing check passes."),
+      detailItem("Launch planning", "Align Sandbox testing with the intended live date. The guide notes that a gap longer than one month may require Sandbox tests to be repeated."),
+      detailItem("Post-test monitoring", "Plan a controlled Family and Friends period and provide a merchant test account when requested for ongoing monitoring and testing."),
+    ]),
+  ],
+  "ipg-http-post": [
+    detailSection("Constructing the 4.2 HTTP POST", "The ordered form body is part of the signature contract.", [
+      detailItem("Format", "Send parameters in the request body as URL-encoded parameter=value tokens separated by ampersands, using UTF-8 and application/x-www-form-urlencoded."),
+      detailItem("Deterministic order", "Build parameters in a stable order and preserve that value order for the 4.2 signature source string."),
+      detailItem("Signature position", "Calculate Signature without the Signature property, then append Signature as the final POST parameter."),
+      detailItem("Environment endpoint", "Send Sandbox traffic only to https://dev-ipg.icards.eu/sandbox/ and Production traffic only to https://ipg.icard.com/."),
+    ]),
+  ],
+  "ipg-data-types": [
+    detailSection("IPG 4.2 Data Validation", "Validate values before signing because any formatting correction changes the signed message.", [
+      detailItem("Fixed-length values", "Preserve required lengths and leading zeroes for A(n), AN(n), and N(n) fields."),
+      detailItem("Amounts", "Use a point as the decimal separator and do not introduce commas or locale-specific formatting."),
+      detailItem("Encoded formats", "Produce valid Base64, XML, or JSON in the selected format and avoid accidental character-set or whitespace changes."),
+      detailItem("Method-specific limits", "Respect the documented field limits, including OrderID values up to 255 characters where stated."),
+    ]),
+  ],
+  "ipg-callback-retries": [
+    detailSection("Acknowledgement Failure and Rollback", "The merchant acknowledgement is part of the 4.2 payment-completion mechanism.", [
+      detailItem("Exact successful acknowledgement", "Return status 200 and only the text OK after verified processing has been durably committed."),
+      detailItem("Invalid acknowledgement", "Any other HTTP status or any additional response-body content is treated as a communication, call, server, or system error."),
+      detailItem("Rollback behavior", "When IPG does not receive OK for IPGPurchaseNotify, it may reverse the authorization and post IPGPurchaseRollback to URL_Notify."),
+      detailItem("Merchant recovery", "The rollback handler must mark the order not paid and reverse any provisional fulfilment or credit applied after the earlier notification."),
+    ]),
+  ],
+  "ipg-callback-troubleshooting": [
+    detailSection("Troubleshooting IPG 4.2 Notifications", "Check transport, signature, correlation, and acknowledgement before escalating.", [
+      detailItem("No notification received", "Confirm URL_Notify was included in the initiating request, is publicly reachable, accepts POST, and is not blocked by merchant infrastructure."),
+      detailItem("Signature verification fails", "Check received parameter order, UTF-8 conversion, the Base64 stage, Signature removal, and the configured iCard public key."),
+      detailItem("Rollback after apparent success", "Check whether the URL_Notify handler returned anything other than exact OK or failed before durably accepting the message."),
+      detailItem("Useful error groups", "Missing parameters, invalid signature, invalid MID, invalid parameters, pending transaction, expired transaction, invalid card, and request-integrity errors are documented in the 4.2 error appendix."),
+    ]),
+  ],
+  "ipg-redirect-overview": [
+    detailSection("Redirect Checkout Sequence", "Redirect is the standard hosted IPG 4.2 customer flow.", [
+      detailItem("Create request", "Persist the order, construct the complete ordered request, sign it using the 4.2 algorithm, and submit the browser to IPG."),
+      detailItem("Customer processing", "IPG displays the payment page, collects card data, and performs 3DS and financial processing."),
+      detailItem("Backend result", "IPG sends the appropriate signed method to URL_Notify. Verify and acknowledge it before updating the final merchant order state."),
+      detailItem("Browser result", "Use URL_OK and URL_Cancel to present the customer experience, but never use the browser return as the only payment confirmation."),
+    ]),
+  ],
+  "ipg-modal-overview": [
+    detailSection("Payment Modal Sequence and Events", "The 4.2 modal keeps the customer on the merchant page while IPG securely handles payment entry.", [
+      detailItem("1. Request token", "Send the signed backend IPGPaymentToken request with the selected ModalType and verify the synchronous token response."),
+      detailItem("2. Load the form", "Add a wrapper with id=ipg and load payment-modal.js from the correct environment using the returned token and classic or dark theme."),
+      detailItem("3. Observe frontend events", "Handle ipg.formload.success, ipg.user.cancel, ipg.payment.success, ipg.user.close.on.success, ipg.payment.error, ipg.user.close.on.error, ipg.loadmodal.error, and ipg.user.close.on.loadmodal.error for customer experience only."),
+      detailItem("4. Confirm asynchronously", "Use the signed asynchronous URL_Notify message as the financial result. Modal events do not replace backend notification processing."),
+    ]),
+  ],
+  "ipg-business-models": shared42DetailSections.models,
+  "ipg-protocol-changes": [
+    detailSection("Moving From 4.2 to 4.5", "Treat migration as a protocol and operational change.", [
+      detailItem("Rebuild signatures", "Replace the 4.2 ordered value-only concatenation and Base64-before-signing algorithm with the documented 4.5 canonical key-path algorithm."),
+      detailItem("Replace notification handling", "Move from method-based POST notifications and exact OK response bodies to the 4.5 signed JSON callback model and acknowledgement rules."),
+      detailItem("Remap methods and fields", "Review stored-card Token versus CardToken, recurring and wallet flows, implementation types, response properties, and business-model-specific backend methods."),
+      detailItem("Re-certify every flow", "Repeat success, decline, cancellation, invalid signature, duplicate, timeout, rollback, modal, stored-card, recurring, reversal, refund, and status scenarios used by the merchant."),
+    ]),
+  ],
+  "ipg-gambling-overview": shared42DetailSections.models,
+  "ipg-v42-gambling-functions": shared42DetailSections.models,
+  "ipg-financial-overview": shared42DetailSections.models,
+  "ipg-v42-financial-functions": shared42DetailSections.models,
+  "ipg-ecommerce-overview": shared42DetailSections.models,
+  "ipg-v42-ecommerce-functions": shared42DetailSections.models,
+};
+
+function base42DetailsForPage(page) {
+  if (page.subtitle === "Security & Signatures") return shared42DetailSections.security;
+  if (page.subtitle === "Callbacks") return shared42DetailSections.callbacks;
+  if (page.subtitle === "Implementation Types") return shared42DetailSections.implementation;
+  if (page.subtitle === "API Methods" || page.subtitle === "Backend Methods") return shared42DetailSections.methods;
+  if (page.subtitle === "Business Models" || page.subtitle === "Business Model") return shared42DetailSections.models;
+  return shared42DetailSections.general;
+}
+
+function enrichVersion42Page(page, sectionId) {
+  if (!page) return page;
+  const detailSections = [
+    ...(["ipg-modal-overview", "ipg-oct"].includes(sectionId) ? [] : base42DetailsForPage(page)),
+    ...(section42DetailSections[sectionId] || []),
+    ...(method42DetailSections[sectionId] || []),
+  ];
+  return {
+    ...page,
+    detailSections: detailSections.filter(
+      (section, index) =>
+        detailSections.findIndex((candidate) => candidate.title === section.title) === index
+    ),
+  };
+}
+
+function enrichVersion42Content(content) {
+  return Object.fromEntries(
+    Object.entries(content).map(([sectionId, page]) => [
+      sectionId,
+      enrichVersion42Page(page, sectionId),
+    ])
+  );
+}
+
+const shared45DetailSections = {
+  general: [
+    detailSection(
+      "How This Section Fits the Integration",
+      "Use this context before implementing individual methods.",
+      [
+        detailItem("Merchant backend responsibility", "The merchant backend creates signed requests, stores configuration and keys securely, correlates OrderID values, verifies signed responses, and processes callbacks."),
+        detailItem("IPG responsibility", "IPG presents or supports the payment interface, validates the submitted request, communicates with payment providers and card schemes, and reports processing results."),
+        detailItem("Cardholder responsibility", "The cardholder selects the payment method, enters or confirms payment data, completes any required 3DS challenge, and returns to the merchant experience."),
+        detailItem("Reliable result channel", "Use the verified backend callback or signed backend response as the authoritative result. A browser redirect is primarily a customer-experience transition."),
+      ]
+    ),
+    detailSection(
+      "Operational Readiness",
+      "Complete these checks before certification and production launch.",
+      [
+        detailItem("Environment configuration", "Keep Sandbox and Production MIDs, Originator values, endpoints, credentials, signing keys, callback URLs, and callback source-IP allowlists separate."),
+        detailItem("Correlation and idempotency", "Persist OrderID before the first request and make callback and backend-operation handling idempotent so retries cannot create duplicate business actions."),
+        detailItem("Observability", "Log method, OrderID, environment, timestamps, status codes, IPG transaction references, callback attempts, and verification results without logging card-sensitive data or private keys."),
+        detailItem("Failure ownership", "Define who investigates invalid signatures, missing callbacks, timeouts, declines, payout issues, reversals, refunds, and reconciliation mismatches."),
+      ]
+    ),
+  ],
+  security: [
+    detailSection(
+      "Security Implementation",
+      "TLS and digital signatures protect different parts of the communication.",
+      [
+        detailItem("TLS protects transport", "Use TLS 1.2 or later to protect data confidentiality while requests and responses travel between the merchant and IPG."),
+        detailItem("Signatures protect the message", "Signatures protect integrity and authenticate the party that owns the corresponding private key. Do not treat successful TLS transport as proof that a message is valid."),
+        detailItem("Private-key storage", "Generate and use signatures only on trusted backend systems. Store private keys in a protected key store or secrets manager and restrict access to the smallest required service scope."),
+        detailItem("Public-key verification", "Use the configured iCard public key to verify signed responses and callbacks before any business state is changed."),
+      ]
+    ),
+    detailSection(
+      "Common Signature Failure Causes",
+      "Most invalid-signature cases are caused by canonicalization differences.",
+      [
+        detailItem("Signature included in source data", "Remove the Signature parameter completely before canonicalization. Do not include it with an empty value."),
+        detailItem("Incorrect normalization", "Lowercase keys, convert real Boolean values to 0 or 1, preserve empty values, index array elements from zero, and ignore empty arrays exactly as documented."),
+        detailItem("Incorrect sorting or encoding", "Convert canonical strings to UTF-8, apply natural sorting, and join with semicolons without adding spaces, line breaks, or extra delimiters."),
+        detailItem("Wrong key or environment", "Confirm that KeyIndex, KeyIndexResp, merchant private key, iCard public key, MID, and environment configuration belong to the same active setup."),
+      ]
+    ),
+  ],
+  callbacks: [
+    detailSection(
+      "Callback Processing Pipeline",
+      "Process every callback through the same controlled pipeline.",
+      [
+        detailItem("1. Network acceptance", "Expose URL_Notify over HTTPS and allow only the documented callback source addresses for the active environment."),
+        detailItem("2. Parse and verify", "Parse the JSON payload, extract Signature, canonicalize the remaining data, and verify it with the iCard public key."),
+        detailItem("3. Apply idempotently", "Use OrderId, Payment status, Operation data, and provider references to update the merchant system exactly once, even when the same callback is delivered again."),
+        detailItem("4. Acknowledge", "Return HTTP 200 OK only after the callback has been verified and durably accepted. Otherwise return the appropriate non-200 status and expect redelivery."),
+      ]
+    ),
+    detailSection(
+      "Callback Interpretation",
+      "Read the callback as a structured event rather than checking only one field.",
+      [
+        detailItem("Payment object", "Use Payment to identify the merchant order, MID, payment type, interface, total amount, currency, and high-level payment status."),
+        detailItem("Operation object", "Use Operation to understand the processing stage and detailed result, including authorization, 3DS, provider response, status code, and message."),
+        detailItem("CardData and Customer", "Use these objects only when present. CardData is masked and may include StoreCard.CardToken when the customer stored a card."),
+        detailItem("Errors array", "When merchant validation fails, inspect every Errors entry to identify the invalid field and correct the request before retrying."),
+      ]
+    ),
+  ],
+  implementation: [
+    detailSection(
+      "Implementation Responsibilities",
+      "Understand where each part of the selected checkout experience runs.",
+      [
+        detailItem("Merchant frontend", "Displays the selected experience, initiates redirects or SDK flows, embeds the returned interface when applicable, and presents customer-facing status without deciding the final payment result."),
+        detailItem("Merchant backend", "Creates signed API requests, protects credentials, verifies signed responses, receives callbacks, and updates merchant-side orders."),
+        detailItem("IPG interface", "Collects or facilitates payment data, performs validation and 3DS processing, and coordinates payment execution with providers and schemes."),
+        detailItem("Result handling", "Design customer return pages and callback processing as separate concerns. The return page provides UX continuity; the callback provides the authoritative backend event."),
+      ]
+    ),
+    detailSection(
+      "Choosing an Implementation Type",
+      "Select the simplest supported implementation that satisfies the required customer experience.",
+      [
+        detailItem("Redirect checkout", "Choose Redirect when the merchant wants the simplest hosted checkout and can send the cardholder to the IPG payment page."),
+        detailItem("Embedded checkout", "Choose Embedded when the payment interface must remain visually inside the merchant page through an iframe URL returned by IPG."),
+        detailItem("Modal", "Choose Modal when checkout should open as an overlay on the merchant page after the backend obtains an IPGPaymentToken."),
+        detailItem("Wallet JS SDK", "Choose the wallet SDK when Apple Pay or Google Pay availability, tokenized wallet data, domain verification, and browser-to-backend coordination are required."),
+      ]
+    ),
+  ],
+  methods: [
+    detailSection(
+      "Common Method Lifecycle",
+      "Apply this lifecycle to every signed IPG 4.5 API or backend method.",
+      [
+        detailItem("Prepare", "Validate required fields, formats, currency and MID compatibility, business-model availability, and a unique persisted OrderID."),
+        detailItem("Sign and send", "Canonicalize the complete request without Signature, sign with the merchant private key, append Signature, and send to the correct environment endpoint."),
+        detailItem("Verify response", "Verify the response Signature before using Status, StatusMsg, URL, Token, Session, IPGTrnref, RRN, or other returned data."),
+        detailItem("Complete the business flow", "Handle the customer interface or backend result, process callbacks where applicable, and use status, reversal, or refund methods only according to the documented flow."),
+      ]
+    ),
+    detailSection(
+      "Error and Timeout Handling",
+      "Avoid duplicate financial operations when the result is uncertain.",
+      [
+        detailItem("Validation error", "Correct the invalid or missing request data before retrying. Re-sign the complete corrected request."),
+        detailItem("Declined operation", "Record the decline status and message, preserve the transaction references, and do not treat a transport-level success as payment approval."),
+        detailItem("Timeout or lost response", "Do not blindly resend financial operations. Use the documented status-check or reversal strategy for the method and business model."),
+        detailItem("Duplicate protection", "Use OrderID and merchant-side idempotency controls to prevent retries, callbacks, or operator actions from applying the same business event twice."),
+      ]
+    ),
+  ],
+  models: [
+    detailSection(
+      "Business-Model Scope",
+      "The configured business model controls available methods and expected operational flows.",
+      [
+        detailItem("Gambling", "Use supported deposit checkout flows, IPGOCT for gaming withdrawals, IPGGetTxnStatus for uncertain OCT results, and IPGReversal when a previously executed payment must be reversed."),
+        detailItem("Financial Institution", "Use the shared payment methods where enabled, IPGFundsDisbursement for loan-to-card flows, IPGGetTxnStatus for uncertain disbursement results, and IPGReversal when required."),
+        detailItem("E-commerce", "Use supported purchase and wallet flows, IPGRefund for post-payment refunds, and IPGReversal for payments that must be reversed before settlement."),
+        detailItem("Do not mix model-only methods", "A method documented for one business model must not be assumed available for another. Confirm the enabled scope with iCard during integration setup."),
+      ]
+    ),
+  ],
+};
+
+const method45DetailSections = {
+  "ipg-purchase": [
+    detailSection("IPGPurchase Usage and Processing", "IPGPurchase starts a customer-present checkout flow.", [
+      detailItem("When to use", "Use for a new card payment through Redirect checkout and for Gambling wallet redirect flows when IPGPaymentContext is GooglePay or ApplePay."),
+      detailItem("Processing sequence", "The merchant backend builds and signs the request, submits or redirects the cardholder to IPG, the cardholder completes checkout and any required 3DS step, and IPG sends the final event to URL_Notify."),
+      detailItem("Success confirmation", "Do not confirm the order only because the customer reached URL_OK. Verify and process the signed callback whose Payment and Operation data indicate success."),
+      detailItem("Cancellation and failure", "URL_Cancel returns the customer experience after cancellation, while declines and validation failures are represented through the callback result and detailed operation or error data."),
+    ]),
+  ],
+  "ipg-3ds-stored": [
+    detailSection("Stored-Card Purchase Usage and Processing", "This method performs a customer-present payment with a previously stored CardToken and full 3DS handling.", [
+      detailItem("When to use", "Use when a CardToken was obtained from an earlier verified callback and the customer is actively making another payment."),
+      detailItem("CardToken handling", "Treat CardToken as sensitive merchant data: store it securely, associate it with the correct customer, and never accept an arbitrary client-supplied token without authorization checks."),
+      detailItem("Customer interaction", "The method opens an IPG interface so the customer can complete 3DS and, when VerifyCVC=1, confirm CVC."),
+      detailItem("Final result", "Use the verified callback as the authoritative outcome and preserve OrderID and transaction references for support and later operations."),
+    ]),
+  ],
+  "ipg-embedded-purchase": [
+    detailSection("Embedded Purchase Flow", "Embedded checkout keeps the customer on the merchant page while IPG hosts the sensitive payment interface.", [
+      detailItem("Bootstrap request", "The merchant backend sends IPGEmbeddedPayment with PaymentType=IPGPurchase and verifies the signed synchronous response."),
+      detailItem("Create iframe", "Use the verified returned URL as the iframe src. Do not construct or modify the IPG iframe URL manually."),
+      detailItem("Browser security", "Host the merchant page over HTTPS, use a stable iframe container, and do not attempt to read or manipulate sensitive content inside the IPG iframe."),
+      detailItem("Result handling", "The iframe experience does not replace backend result processing. Use URL_Notify callback handling to update the order."),
+    ]),
+  ],
+  "ipg-embedded-stored": [
+    detailSection("Embedded Stored-Card Flow", "This flow combines an embedded interface with a stored CardToken and inline 3DS handling.", [
+      detailItem("When to use", "Use when the merchant wants the customer to remain on-page while paying with a previously stored card."),
+      detailItem("Required differences", "Set PaymentType=IPG3DSPurchaseWithStoredCard, send the authorized CardToken, and choose whether VerifyCVC is required."),
+      detailItem("Security boundary", "Keep CardToken authorization and signed backend communication on the merchant server; the browser should only receive the verified iframe URL."),
+      detailItem("Completion", "Treat the verified callback as the final payment event and handle repeated callback delivery idempotently."),
+    ]),
+  ],
+  "ipg-payment-token-purchase": [
+    detailSection("Modal Purchase Flow", "IPGPaymentToken creates the short-lived bootstrap token required by the payment modal.", [
+      detailItem("Backend token request", "The merchant backend sends the signed payment data with ModalType=IPGPurchase and verifies the signed response before using Token."),
+      detailItem("Create payment form", "Load the documented payment-modal.js integration and use the returned Token to open the IPG-controlled modal inside the merchant experience."),
+      detailItem("Token lifecycle", "Use the token only for the intended order and modal launch. Do not persist it as a reusable payment credential."),
+      detailItem("Final result", "Closing or completing the modal is not sufficient proof of success; process the verified URL_Notify callback."),
+    ]),
+  ],
+  "ipg-payment-token-stored": [
+    detailSection("Modal Stored-Card Flow", "This modal flow uses an existing CardToken and performs the required customer verification inline.", [
+      detailItem("When to use", "Use when the customer selects a previously stored card and the merchant wants an overlay checkout experience."),
+      detailItem("Required differences", "Set ModalType=IPG3DSPurchaseWithStoredCard, provide CardToken, and configure VerifyCVC according to the required flow."),
+      detailItem("Authorization check", "Confirm that the stored token belongs to the authenticated merchant customer before requesting the payment token."),
+      detailItem("Final result", "Verify and process the callback before updating the order, even when the modal reports completion to the browser."),
+    ]),
+  ],
+  "ipg-token-provider-session": [
+    detailSection("Apple Pay Session Flow", "IPGTokenProviderSession obtains the Apple Pay merchant session used by the browser SDK.", [
+      detailItem("Prerequisites", "Serve the merchant page over HTTPS, use a valid TLS certificate, complete Apple domain verification, and configure the exact merchant domain."),
+      detailItem("Browser-to-backend step", "The SDK sends ValidationURL and merchant context to the merchant backend. The backend must validate the request before contacting IPG."),
+      detailItem("Backend-to-IPG step", "Send the signed IPGTokenProviderSession request and verify the signed response before returning Session data to the browser."),
+      detailItem("Order correlation", "Preserve the OrderID and use the same order context when the Apple Pay authorization continues to IPGTokenizedCardPurchase."),
+    ]),
+  ],
+  "ipg-tokenized-card-purchase": [
+    detailSection("Tokenized Wallet Purchase Flow", "IPGTokenizedCardPurchase executes Apple Pay or Google Pay data received through the wallet SDK.", [
+      detailItem("When to use", "Use for the full JS SDK wallet flow supported by the active business model. Gambling redirect wallet flows use IPGPurchase with IPGPaymentContext instead."),
+      detailItem("Browser-to-backend trust", "Receive the tokenized wallet payload on the merchant backend, validate the order and amount from trusted server-side state, and do not trust client-supplied totals."),
+      detailItem("Signed IPG request", "Send TokenizedCardProvider and TokenizedCard with the complete signed backend request, then verify the signed response."),
+      detailItem("Result processing", "Correlate the signed response and callback with the original OrderID and handle retries or duplicate events idempotently."),
+    ]),
+  ],
+  "ipg-oct": [
+    detailSection("IPGOCT Usage and Processing", "IPGOCT is the Gambling model payout method for sending winnings to a cardholder card.", [
+      detailItem("Correct method", "Every OCT request must send IPGmethod=IPGOCT. Do not reuse an IPGPurchase request bundle or include customer-facing purchase callback fields."),
+      detailItem("OCT by PAN path", "Use CardToken as the documented card-destination reference and omit IPG_Trnref and Approval. The supplied method table does not define a raw PAN request property."),
+      detailItem("TRN and Approval path", "Send both IPG_Trnref and Approval from the previously executed payment and omit CardToken."),
+      detailItem("Shared validation", "For either path, send the valid MID, unique OrderID, amount, MID currency, valid recipient names, optional OutputFormat, and Signature as the last POST parameter."),
+      detailItem("Response handling", "Verify Signature before using Status, StatusMsg, IPGTrnref, or IPGTrnrefOriginal. IPGTrnrefOriginal is available for OCT by TRN and Approval."),
+      detailItem("Timeout handling", "Use IPGGetTxnStatus only when an OCT result is uncertain or timed out; do not blindly send another withdrawal."),
+    ]),
+  ],
+  "ipg-funds-disbursement": [
+    detailSection("Funds Disbursement Usage and Processing", "IPGFundsDisbursement is the Financial Institution model method for granting funds directly to a cardholder card.", [
+      detailItem("When to use", "Use only for the approved Financial Institution loan-to-card or funds-disbursement business flow."),
+      detailItem("Reference options", "Use original IPG_Trnref plus Approval or an authorized CardToken according to the configured disbursement scenario."),
+      detailItem("Recipient and order data", "Validate recipient names, amount, currency, OrderID, and the card relationship before signing the request. OrderID may be up to the documented method-specific limit."),
+      detailItem("Uncertain result", "Use IPGGetTxnStatus before retrying an uncertain disbursement and preserve IPGTrnref, IPGTrnrefOriginal, and RRN for reconciliation."),
+    ]),
+  ],
+  "ipg-refund": [
+    detailSection("Refund Usage and Processing", "IPGRefund returns funds for a previously executed E-commerce payment.", [
+      detailItem("When to use", "Use only for the E-commerce refund flow after the original payment has been identified and the merchant has approved the refund."),
+      detailItem("Original transaction reference", "Send the correct original IPG_Trnref and validate that refund amount and currency follow the merchant policy and original transaction context."),
+      detailItem("Response parsing", "The documented refund response uses lowercase field names. Verify Signature and parse the response using the exact documented names."),
+      detailItem("Merchant accounting", "Persist the refund OrderID, original transaction reference, amount, currency, status, and response for customer support and reconciliation."),
+    ]),
+  ],
+  "ipg-reversal": [
+    detailSection("Reversal Usage and Processing", "IPGReversal cancels a previously executed payment before settlement and is required for supported merchant flows.", [
+      detailItem("When to use", "Use when an executed payment must be reversed before settlement or according to the integration's timeout and recovery procedure."),
+      detailItem("Reference the correct transaction", "Send the original IPG_Trnref with the correct MID and OrderID. Do not reverse a transaction based only on browser state."),
+      detailItem("Verify result", "Verify the signed response and store both IPGTrnref and IPGTrnrefOriginal when returned."),
+      detailItem("Refund versus reversal", "Use reversal for the documented pre-settlement cancellation flow. Use IPGRefund only for the supported E-commerce post-payment refund flow."),
+    ]),
+  ],
+  "ipg-get-status": [
+    detailSection("Transaction Status Usage", "IPGGetTxnStatus resolves uncertain backend-operation outcomes for IPGOCT and IPGFundsDisbursement.", [
+      detailItem("When to use", "Use after a timeout, lost response, or operational uncertainty for a previously submitted OCT or funds-disbursement OrderID."),
+      detailItem("Do not use as a general payment poller", "This method is documented for the supported backend payout or disbursement operations, not as a replacement for normal callback processing."),
+      detailItem("Success condition", "Treat the backend transaction as successful only when the documented transaction-status fields indicate success together."),
+      detailItem("Follow-up decision", "Use the verified status result to decide whether to wait, investigate, reverse, or reconcile. Do not blindly repeat the original financial request."),
+    ]),
+  ],
+};
+
+const section45DetailSections = {
+  "ipg-overview": [
+    detailSection("End-to-End IPG Flow", "The shared architecture applies across all supported business models.", [
+      detailItem("1. Scope", "Merchant and iCard agree the business model, methods, environments, MID configuration, currencies, wallet requirements, and testing scenarios."),
+      detailItem("2. Initiate", "The merchant backend creates a valid signed request using the method that matches the selected checkout or backend operation."),
+      detailItem("3. Process", "IPG validates the request and coordinates customer interaction, 3DS, payment provider, and card-scheme processing as applicable."),
+      detailItem("4. Confirm and operate", "The merchant verifies responses and callbacks, updates its systems idempotently, and supports reversal, refund, status, and reconciliation procedures."),
+    ]),
+  ],
+  "ipg-integration-steps": [
+    detailSection("Integration Deliverables", "Each integration phase should produce a clear, reviewable outcome.", [
+      detailItem("Technical scope", "Document selected methods, business model, expected customer journeys, callback URL, supported currencies, and backend-operation requirements."),
+      detailItem("Sandbox evidence", "Provide completed scenarios with OrderID, transaction references, timestamps, results, and evidence that signatures and callbacks were handled correctly."),
+      detailItem("Production readiness", "Confirm production keys, endpoints, MIDs, callback source allowlist, monitoring, alerting, support ownership, and rollback procedures."),
+      detailItem("Go-live monitoring", "Closely monitor request errors, declines, invalid signatures, callback delivery, duplicate events, reversals, refunds, and reconciliation after launch."),
+    ]),
+  ],
+  "ipg-http-post": [
+    detailSection("HTTP POST Construction", "Build the request body deterministically before signing and sending.", [
+      detailItem("Encoding", "Encode request parameters as application/x-www-form-urlencoded using UTF-8. Use ampersand separators and preserve the documented parameter values."),
+      detailItem("Signature ordering", "Generate Signature from the canonicalized request data without Signature, then append Signature as the last request parameter."),
+      detailItem("Endpoint selection", "Send Sandbox requests only to https://dev-ipg.icards.eu/sandbox/ and Production requests only to https://ipg.icard.com/."),
+      detailItem("Transport logging", "Record endpoint environment, HTTP result, OrderID, method, and timing while masking credentials, signatures where required by policy, and customer-sensitive data."),
+    ]),
+  ],
+  "ipg-data-types": [
+    detailSection("Data Validation Rules", "Validate the documented type before signing because formatting changes affect both validation and Signature.", [
+      detailItem("Numeric strings", "Preserve leading zeroes for N(n) fields and use a point as the decimal separator for Double(M,D)."),
+      detailItem("Dates and times", "Use the exact documented ISO formats and ensure merchant systems agree on timezone handling where timestamps are exchanged."),
+      detailItem("Encoded values", "Produce valid Base64, JSON, and XML values without accidental whitespace or character-set conversion."),
+      detailItem("Length limits", "Enforce method-specific maximum lengths before signing to prevent rejected requests and ambiguous truncation."),
+    ]),
+  ],
+  "ipg-redirect-overview": [
+    detailSection("Redirect Checkout Flow", "Redirect checkout is the simplest hosted customer-payment experience.", [
+      detailItem("Initiation", "The merchant creates the signed IPGPurchase or IPG3DSPurchaseWithStoredCard request and sends the cardholder to IPG."),
+      detailItem("Customer processing", "IPG presents the payment interface and handles card input, stored-card verification, 3DS, and provider processing."),
+      detailItem("Customer return", "IPG returns the browser to URL_OK or URL_Cancel according to the customer-facing flow."),
+      detailItem("Backend confirmation", "The merchant confirms the final result only from the verified URL_Notify callback."),
+    ]),
+  ],
+  "ipg-embedded-overview": [
+    detailSection("Embedded Checkout Flow", "Embedded checkout uses an IPG-hosted interface inside the merchant page.", [
+      detailItem("Create interface", "The merchant backend requests IPGEmbeddedPayment and verifies the signed response containing the iframe URL."),
+      detailItem("Embed URL", "The merchant frontend places the verified URL into an iframe on an HTTPS page."),
+      detailItem("Maintain boundaries", "IPG owns sensitive payment collection inside the iframe; merchant code should not access or imitate that content."),
+      detailItem("Confirm result", "Use callback processing for the final payment result and make the handler idempotent."),
+    ]),
+  ],
+  "ipg-modal-overview": [
+    detailSection("Modal Checkout Flow", "Modal checkout opens an IPG payment experience over the merchant page.", [
+      detailItem("Obtain token", "The merchant backend sends IPGPaymentToken and verifies the signed token response."),
+      detailItem("Open modal", "The merchant frontend uses the documented wrapper and payment-modal.js integration with the returned token."),
+      detailItem("Handle customer experience", "Support modal completion, cancellation, and closure without treating frontend state as final payment confirmation."),
+      detailItem("Confirm result", "Process the verified URL_Notify callback before fulfilling the order."),
+    ]),
+  ],
+  "ipg-wallet-overview": [
+    detailSection("Wallet Flow Selection", "Wallet implementation differs by business model and provider.", [
+      detailItem("Gambling redirect wallets", "Google Pay and Apple Pay may use SDK availability checks followed by IPGPurchase with the appropriate IPGPaymentContext."),
+      detailItem("Full JS SDK wallets", "Financial Institution and E-commerce use the supported Apple Pay or Google Pay SDK flow with tokenized backend purchase processing."),
+      detailItem("Apple-specific session", "Apple Pay requires domain verification and IPGTokenProviderSession before the final tokenized-card purchase."),
+      detailItem("Server-side validation", "Always validate amount, currency, OrderID, customer, and provider on the merchant backend before sending the signed IPG request."),
+    ]),
+  ],
+  "ipg-apple-pay": [
+    detailSection("Apple Pay Implementation Detail", "Apple Pay requires a secure merchant domain and coordinated browser/backend processing.", [
+      detailItem("Environment configuration", "Use the environment-specific iCard SDK, HTTPS, valid TLS, and the verified merchant domain configured for Apple Pay."),
+      detailItem("Availability", "Show Apple Pay only when the SDK reports availability on the current supported device and browser."),
+      detailItem("Session and payment", "For the full SDK flow, obtain the Apple session through IPGTokenProviderSession, then send the authorized wallet data through IPGTokenizedCardPurchase."),
+      detailItem("Gambling alternative", "Where documented for Gambling, Apple Pay redirect uses IPGPurchase with IPGPaymentContext=ApplePay instead of the full tokenized-card flow."),
+    ]),
+  ],
+  "ipg-google-pay": [
+    detailSection("Google Pay Implementation Detail", "Google Pay uses SDK availability checks and the business-model-supported purchase path.", [
+      detailItem("Availability", "Display the Google Pay option only after the SDK confirms it is ready on the current device and browser."),
+      detailItem("Trusted order data", "Calculate and validate amount, currency, OrderID, and customer context on the backend rather than trusting browser-provided values."),
+      detailItem("Full SDK flow", "For supported Financial Institution and E-commerce flows, pass authorized tokenized wallet data to IPGTokenizedCardPurchase."),
+      detailItem("Gambling alternative", "Where documented for Gambling, Google Pay redirect uses IPGPurchase with IPGPaymentContext=GooglePay."),
+    ]),
+  ],
+  "ipg-wallet-sdk": [
+    detailSection("JS SDK Integration Detail", "The SDK coordinates wallet availability and customer interaction but does not replace merchant backend security.", [
+      detailItem("Load the correct script", "Use the Sandbox SDK during integration and the Production SDK only after production configuration and certification are complete."),
+      detailItem("Configure exact merchant data", "Set MID, merchant name, amount, currency, environment, container IDs, merchant domain, and order context from trusted configuration."),
+      detailItem("Backend endpoint", "The configured processing endpoint must validate browser requests and send signed requests to IPG without exposing private keys."),
+      detailItem("Browser compatibility", "Handle unsupported devices, unavailable wallets, customer cancellation, and SDK errors with a clear fallback payment option."),
+    ]),
+  ],
+  "ipg-business-models": shared45DetailSections.models,
+  "ipg-feature-matrix": shared45DetailSections.models,
+  "ipg-payment-availability": shared45DetailSections.models,
+  "ipg-key-field-differences": shared45DetailSections.models,
+  "ipg-protocol-changes": [
+    detailSection("Migration Focus", "Treat protocol 4.5 as a behavioral migration, not only a version-number change.", [
+      detailItem("Rebuild signing and verification", "Implement the 4.5 canonicalization and RSA-SHA256 behavior for all requests, responses, and callbacks."),
+      detailItem("Replace notification assumptions", "Use signed JSON callbacks to URL_Notify and HTTP 200 acknowledgement instead of older notification-method behavior."),
+      detailItem("Update field and method mappings", "Review CardToken naming, method availability, callback objects, response fields, and model-specific backend operations."),
+      detailItem("Re-certify end to end", "Repeat Sandbox scenarios for every used flow, including declines, invalid data, callback retries, timeouts, and backend recovery."),
+    ]),
+  ],
+  "ipg-gambling-overview": [
+    detailSection("Gambling Processing Model", "The Gambling model combines customer deposits with controlled gaming withdrawals.", [
+      detailItem("Deposits", "Use the selected redirect, embedded, modal, or supported wallet deposit flow and confirm the result through the verified callback."),
+      detailItem("Withdrawals", "Use IPGOCT only after merchant-side player and withdrawal validation. Preserve transaction references for status and reconciliation."),
+      detailItem("Uncertain OCT", "Use IPGGetTxnStatus before retrying or taking another financial action when an OCT response is missing or uncertain."),
+      detailItem("Recovery", "Implement IPGReversal and define operational ownership for failed deposits, uncertain withdrawals, duplicate prevention, and reconciliation."),
+    ]),
+  ],
+  "ipg-gambling-functions": shared45DetailSections.models,
+  "ipg-financial-overview": [
+    detailSection("Financial Institution Processing Model", "The model combines supported customer payments with controlled funds disbursement.", [
+      detailItem("Disbursement authorization", "Validate the approved loan or funds-disbursement decision, recipient, destination card relationship, amount, and currency before calling IPGFundsDisbursement."),
+      detailItem("Status and recovery", "Use IPGGetTxnStatus for uncertain disbursement outcomes and IPGReversal according to the documented recovery flow."),
+      detailItem("References", "Persist OrderID, IPGTrnref, IPGTrnrefOriginal, RRN, status, and timestamps for audit, customer support, and reconciliation."),
+      detailItem("Separation of duties", "Define who can authorize a disbursement, execute it, investigate exceptions, and reconcile the result."),
+    ]),
+  ],
+  "ipg-financial-functions": shared45DetailSections.models,
+  "ipg-ecommerce-overview": [
+    detailSection("E-commerce Processing Model", "The model supports customer purchases and post-payment merchant operations.", [
+      detailItem("Purchases", "Choose the appropriate checkout or wallet experience and use the verified callback as the final order-payment event."),
+      detailItem("Reversal", "Use IPGReversal for the documented pre-settlement cancellation or recovery scenario."),
+      detailItem("Refund", "Use IPGRefund for an approved post-payment refund and preserve the original IPG transaction reference."),
+      detailItem("Fulfilment control", "Do not fulfil an order from redirect state alone. Fulfil only after the verified callback and merchant-side fraud or order checks succeed."),
+    ]),
+  ],
+  "ipg-ecommerce-functions": shared45DetailSections.models,
+};
+
+function base45DetailsForPage(page) {
+  if (page.subtitle === "Security & Signatures") return shared45DetailSections.security;
+  if (page.subtitle === "Callbacks") return shared45DetailSections.callbacks;
+  if (page.subtitle === "Implementation Types" || page.subtitle === "Wallet Deposits") return shared45DetailSections.implementation;
+  if (page.subtitle === "API Methods" || page.subtitle === "Backend Methods") return shared45DetailSections.methods;
+  if (page.subtitle === "Business Models" || page.subtitle === "Business Model") return shared45DetailSections.models;
+  return shared45DetailSections.general;
+}
+
+function enrichVersion45Page(page, sectionId) {
+  if (!page) return page;
+  const specific = [
+    ...(section45DetailSections[sectionId] || []),
+    ...(method45DetailSections[sectionId] || []),
+  ];
+  return {
+    ...page,
+    detailSections: [
+      ...(["ipg-modal-overview", "ipg-oct"].includes(sectionId) ? [] : base45DetailsForPage(page)),
+      ...specific,
+    ],
+  };
+}
+
+function enrichVersion45Content(content) {
+  return Object.fromEntries(
+    Object.entries(content).map(([sectionId, page]) => [
+      sectionId,
+      enrichVersion45Page(page, sectionId),
+    ])
+  );
+}
+
+const detailedIpG45Content = enrichVersion45Content(ipgContent);
+const detailedGambling45Content = enrichVersion45Content(gamblingContent);
+const detailedFinancial45Content = enrichVersion45Content(financialInstitutionContent);
+const detailedEcommerce45Content = enrichVersion45Content(ecommerceContent);
+const detailedIpG42Content = enrichVersion42Content(v42Content);
+const detailedGambling42Content = enrichVersion42Content(v42GamblingContent);
+const detailedFinancial42Content = enrichVersion42Content(v42FinancialInstitutionContent);
+const detailedEcommerce42Content = enrichVersion42Content(v42EcommerceContent);
+
 const versionedReference = (menu, content, summary) => ({
   menu,
   content,
@@ -3683,8 +4899,12 @@ export const ipgBusinessModelDocuments = {
     defaultVersion: "4.5",
     defaultSection: "ipg-overview",
     versions: {
-      "4.2": versionedReference(v42Menu, v42Content, ipgVersionDocuments["4.2"].summary),
-      "4.5": versionedReference(ipgMenu, ipgContent, ipgVersionDocuments["4.5"].summary),
+      "4.2": versionedReference(v42Menu, detailedIpG42Content, ipgVersionDocuments["4.2"].summary),
+      "4.5": versionedReference(
+        ipgMenu,
+        detailedIpG45Content,
+        enrichVersion45Page(ipgVersionDocuments["4.5"].summary, "ipg-version-summary")
+      ),
     },
   },
   gambling: {
@@ -3699,10 +4919,14 @@ export const ipgBusinessModelDocuments = {
     versions: {
       "4.2": versionedReference(
         v42GamblingMenu,
-        v42GamblingContent,
+        detailedGambling42Content,
         scopedVersionSummary("Gambling", "4.2", ["BM Gambling"])
       ),
-      "4.5": versionedReference(gamblingMenu, gamblingContent, gamblingVersion45Summary),
+      "4.5": versionedReference(
+        gamblingMenu,
+        detailedGambling45Content,
+        enrichVersion45Page(gamblingVersion45Summary, "ipg-gambling-overview")
+      ),
     },
   },
   "financial-institution": {
@@ -3717,13 +4941,16 @@ export const ipgBusinessModelDocuments = {
     versions: {
       "4.2": versionedReference(
         v42FinancialInstitutionMenu,
-        v42FinancialInstitutionContent,
+        detailedFinancial42Content,
         scopedVersionSummary("Financial Institution", "4.2", ["BM Financial Institution"])
       ),
       "4.5": versionedReference(
         financialInstitutionMenu,
-        financialInstitutionContent,
-        scopedVersionSummary("Financial Institution", "4.5", ["BM Financial Institution"])
+        detailedFinancial45Content,
+        enrichVersion45Page(
+          scopedVersionSummary("Financial Institution", "4.5", ["BM Financial Institution"]),
+          "ipg-financial-overview"
+        )
       ),
     },
   },
@@ -3739,13 +4966,16 @@ export const ipgBusinessModelDocuments = {
     versions: {
       "4.2": versionedReference(
         v42EcommerceMenu,
-        v42EcommerceContent,
+        detailedEcommerce42Content,
         scopedVersionSummary("ECommerce", "4.2", ["BM ECommerce"])
       ),
       "4.5": versionedReference(
         ecommerceMenu,
-        ecommerceContent,
-        scopedVersionSummary("ECommerce", "4.5", ["BM ECommerce"])
+        detailedEcommerce45Content,
+        enrichVersion45Page(
+          scopedVersionSummary("ECommerce", "4.5", ["BM ECommerce"]),
+          "ipg-ecommerce-overview"
+        )
       ),
     },
   },
